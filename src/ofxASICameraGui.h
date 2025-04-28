@@ -1,4 +1,3 @@
-
 // ofxASICameraGui.h
 #pragma once
 
@@ -27,4 +26,19 @@ private:
 
     void onSliderChanged(int &value);
     void onToggleChanged(bool &value);
+
+    // Ajout pour infos, binning et ROI
+    ofParameter<std::string> cameraInfo;
+    ofParameter<int> binParam;
+    ofParameter<int> roiX, roiY, roiW, roiH;
+    void onBinChanged(int &value);
+    void onROIChanged(int &);
+
+    // Ajout pour le mode caméra
+    ofParameter<int> cameraMode;
+    ofxButton softTriggerButton;
+    void onModeChanged(int &mode);
+    void onSoftTriggerPressed();
+    std::map<int, std::string> modeNames;
+    void setupModeNames();
 };

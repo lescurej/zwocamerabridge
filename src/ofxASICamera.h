@@ -31,6 +31,20 @@ public:
     // Callback sur nouvelle image
     std::function<void()> onNewFrame;
 
+    int getCameraID() const { return cameraID; }
+    ASI_CAMERA_INFO getCameraInfo() const;
+    std::vector<int> getSupportedBins() const;
+    void setBinning(int bin);
+    int getBinning() const;
+    void setROI(int x, int y, int w, int h);
+
+    // Méthodes pour le mode caméra
+    bool isTriggerCamera() const;
+    std::vector<ASI_CAMERA_MODE> getSupportedModes() const;
+    ASI_CAMERA_MODE getCurrentMode() const;
+    bool setMode(ASI_CAMERA_MODE mode);
+    bool sendSoftTrigger(bool start = true);
+
 private:
     int cameraID = -1;
     bool connected = false;
@@ -55,4 +69,7 @@ private:
     void stopCaptureThread();
 
     ofxSyphonServer *syphonServer = nullptr;
+
+    int currentBin = 1;
+    ASI_CAMERA_MODE currentMode = ASI_MODE_NORMAL;
 };

@@ -158,3 +158,92 @@ std::vector<ASI_CONTROL_CAPS> ofxASICamera::getAllControls() const
 {
     return controls;
 }
+
+ASI_CAMERA_INFO ofxASICamera::getCameraInfo() const
+{
+    ASI_CAMERA_INFO info;
+    ASIGetCameraProperty(&info, cameraID);
+    return info;
+}
+
+std::vector<int> ofxASICamera::getSupportedBins() const
+{
+    ASI_CAMERA_INFO info = getCameraInfo();
+    std::vector<int> bins;
+    for (int i = 0; i < 16 && info.SupportedBins[i] != 0; ++i)
+        bins.push_back(info.SupportedBins[i]);
+    return bins;
+}
+
+void ofxASICamera::setBinning(int bin)
+{
+    currentBin = bin;
+    ASISetROIFormat(cameraID, width, height, bin, imgType);
+}
+
+int ofxASICamera::getBinning() const
+{
+    return currentBin;
+}
+
+void ofxASICamera::setROI(int x, int y, int w, int h)
+{
+    ASISetStartPos(cameraID, x, y);
+    ASISetROIFormat(cameraID, w, h, getBinning(), imgType);
+}
+
+bool ofxASICamera::isTriggerCamera() const
+{
+    ASI_CAMERA_INFO info = getCameraInfo();
+    return info.IsTriggerCam;
+}
+
+std::vector<ASI_CAMERA_MODE> ofxASICamera::getSupportedModes() const
+{
+    std::vector<ASI_CAMERA_MODE> modes;
+    if (!isTriggerCamera())
+        return modes;
+
+    ASI_SUPPORTED_MODE supportedMode;
+    if (ASIGetCameraSupportMode(cameraID, &supportedMode) == ASI_SUCCESS)
+    {
+        for (int i = 0; i < 16 && supportedMode.SupportedCameraMode[i] != ASI_MODE_END; ++i)
+        {
+            modes.push_back(supportedMode.SupportedCameraMode[i]);
+        }
+    }
+    return modes;
+}
+
+ASI_CAMERA_MODE ofxASICamera::getCurrentMode() const
+{
+    if (!isTriggerCamera())
+        return ASI_MODE_NORMAL;
+
+    ASI_CAMERA_MODE mode;
+    if (ASIGetCameraMode(cameraID, &mode) == ASI_SUCCESS)
+    {
+        return mode;
+    }
+    return ASI_MODE_NORMAL;
+}
+
+bool ofxASICamera::setMode(ASI_CAMERA_MODE mode)
+{
+    if (!isTriggerCamera())
+        return false;
+
+    if (ASISetCameraMode(cameraID, mode) == ASI_SUCCESS)
+    {
+        currentMode = mode;
+        return true;
+    }
+    return false;
+}
+
+bool ofxASICamera::sendSoftTrigger(bool start)
+{
+    if (!isTriggerCamera())
+        return false;
+    return ASISendSoftTrigger(cameraID, start ? ASI_TRUE : ASI_FALSE) == ASI_SUCCESS;
+}
