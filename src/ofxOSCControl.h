@@ -6,6 +6,9 @@
 #include "ofThread.h"
 #include <vector>
 #include <string>
+#include <atomic>
+#include <mutex>
+
 class ofxOSCControl : public ofThread
 {
 public:
@@ -32,6 +35,7 @@ private:
     ofxOscReceiver receiver;
     ofxOscSender sender;
     std::vector<ASI_CONTROL_CAPS> controls;
+    std::mutex controlsMutex;
     int cameraID; // ID de la caméra
     int receivePort;
     int sendPort;
@@ -44,5 +48,5 @@ private:
     ofxInputField<std::string> receiveHostInput;
 
     // Flag pour contrôler la réception
-    bool bNewMessage;
+    std::atomic<bool> bNewMessage;
 };

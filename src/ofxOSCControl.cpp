@@ -69,6 +69,7 @@ void ofxOSCControl::fetchCameraControls()
     int numControls = 0;
     ASIGetNumOfControls(cameraID, &numControls);
 
+    std::lock_guard<std::mutex> lock(controlsMutex);
     controls.clear();
     for (int i = 0; i < numControls; ++i)
     {
@@ -81,6 +82,7 @@ void ofxOSCControl::fetchCameraControls()
 // Appliquer un contrôle à la caméra
 void ofxOSCControl::setCameraControl(int controlID, float value)
 {
+    std::lock_guard<std::mutex> lock(controlsMutex);
     if (controlID >= 0 && controlID < controls.size())
     {
         ASI_CONTROL_CAPS cap = controls[controlID];
