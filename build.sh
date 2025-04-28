@@ -40,6 +40,16 @@ install_name_tool -change "@loader_path/${DYLIB_NAME}" \
   "@loader_path/../Frameworks/${DYLIB_NAME}" \
   "${BIN_PATH}"
 
+LIBUSB_DYLIB_NAME="libusb-1.0.0.dylib"
+LIBUSB_DYLIB_PATH="libs/libusb/${LIBUSB_DYLIB_NAME}"
+
+#copier la librairie libusb
+cp "$LIBUSB_DYLIB_PATH" "$FRAMEWORKS_PATH"
+
+#linnker la librairie libusb
+install_name_tool -change "@loader_path/libusb-1.0.0.dylib" \
+  "@loader_path/../Frameworks/libusb-1.0.0.dylib" \
+  "${FRAMEWORKS_PATH}/${DYLIB_NAME}"
 
 # Chemin vers Syphon.framework (fourni par ofxSyphon)
 SYPHON_SOURCE="$SCRIPT_DIR/../../../addons/ofxSyphon/libs/Syphon/lib/osx/Syphon.framework"
@@ -56,4 +66,5 @@ install_name_tool -change \
   "@loader_path/../Frameworks/Syphon.framework/Versions/A/Syphon" \
   "${BIN_PATH}"
 
-#otool -L "${BIN_PATH}"
+otool -L "${BIN_PATH}"
+
