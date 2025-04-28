@@ -1,0 +1,37 @@
+# Fichiers et dossiers générés par la compilation
+bin/
+obj/
+
+.vscode/browse*
+
+# Fichiers temporaires système
+.DS_Store
+
+# Fichiers de configuration utilisateur Xcode
+*.xcuserdatad/
+*.xcuserdata/
+*.xcworkspace/
+*.xcuserstate
+
+# Fichiers de build Xcode
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.pbxuser
+*.xcscmblueprint
+
+# Fichiers de logs et temporaires
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Fichiers de sauvegarde d'éditeurs
+*~
+*.bak
+
+# Fichiers de signature de code
+_CodeSignature/
+
+# Fichiers de configuration utilisateur
+settings.xml

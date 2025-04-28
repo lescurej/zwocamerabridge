@@ -1,0 +1,10 @@
+{
+    "terminal.integrated.profiles.osx": {
+        "x86_64 Terminal": {
+            "path": "arch",
+            "args": ["-x86_64", "zsh"],
+            "overrideName": true
+        }
+    },
+    "terminal.integrated.defaultProfile.osx": "x86_64 Terminal"
+}

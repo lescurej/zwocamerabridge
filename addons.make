@@ -1,0 +1,3 @@
+ofxSyphon
+ofxGui
+ofxOsc
