@@ -14,6 +14,7 @@ public:
     void setup(ofxASICamera &camera);
     void draw();
     void update();
+    void saveSettings();
 
 private:
     ofxPanel panel;
@@ -26,6 +27,4 @@ private:
 
     void onSliderChanged(int &value);
     void onToggleChanged(bool &value);
-    void saveSettings();
-    void loadSettings();
 };

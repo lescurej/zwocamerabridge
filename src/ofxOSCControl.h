@@ -28,6 +28,8 @@ public:
     // Appliquer un contrôle à la caméra
     void setCameraControl(int controlID, float value);
 
+    void saveSettings();
+
 protected:
     void threadedFunction() override;
 

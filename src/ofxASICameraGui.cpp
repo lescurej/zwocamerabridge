@@ -1,5 +1,6 @@
 // ofxASICameraGui.cpp
 #include "ofxASICameraGui.h"
+#define CAMERA_SETTINGS_FILE "camera.xml"
 
 ofxASICameraGui::ofxASICameraGui()
 {
@@ -7,13 +8,17 @@ ofxASICameraGui::ofxASICameraGui()
 
 ofxASICameraGui::~ofxASICameraGui()
 {
-    saveSettings();
+}
+
+void ofxASICameraGui::saveSettings()
+{
+    panel.saveToFile(CAMERA_SETTINGS_FILE);
 }
 
 void ofxASICameraGui::setup(ofxASICamera &camera)
 {
     cam = &camera;
-    panel.setup("ASI Camera Controls");
+    panel.setup("ASI Camera Controls", CAMERA_SETTINGS_FILE, 10, 10);
     controlNames.clear();
 
     auto controls = cam->getAllControls();
@@ -40,7 +45,8 @@ void ofxASICameraGui::setup(ofxASICamera &camera)
             panel.add(&autoToggles[cap.ControlType]);
         }
     }
-    loadSettings();
+    panel.loadFromFile(CAMERA_SETTINGS_FILE);
+
     initialized = true;
 }
 
@@ -94,37 +100,6 @@ void ofxASICameraGui::onToggleChanged(bool &value)
             int val = sliders[type].get();
             cam->setControlValue(type, val, value);
             break;
-        }
-    }
-}
-
-void ofxASICameraGui::saveSettings()
-{
-    ofJson json;
-    for (auto &[type, param] : sliders)
-    {
-        json[controlNames[type]] = param.get();
-    }
-    for (auto &[type, toggle] : autoToggles)
-    {
-        json[controlNames[type]] = toggle.getParameter().cast<bool>().get();
-    }
-    ofSaveJson("camera_settings.json", json);
-}
-
-void ofxASICameraGui::loadSettings()
-{
-    ofFile file("camera_settings.json");
-    if (file.exists())
-    {
-        ofJson json = ofLoadJson(file);
-        for (auto &[type, param] : sliders)
-        {
-            param.set(json[controlNames[type]]);
-        }
-        for (auto &[type, toggle] : autoToggles)
-        {
-            toggle.getParameter().cast<bool>().set(json[controlNames[type]]);
         }
     }
 }

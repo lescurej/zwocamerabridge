@@ -37,4 +37,6 @@ void ofApp::draw()
 //--------------------------------------------------------------
 void ofApp::exit()
 {
+    cameraGui.saveSettings();
+    oscControl.saveSettings();
 }
