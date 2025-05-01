@@ -12,10 +12,6 @@ ofxOSCControl::ofxOSCControl()
 
 ofxOSCControl::~ofxOSCControl()
 {
-    stopThread();
-    waitForThread(true);
-    receiver.stop();
-    sender.clear();
 }
 
 void ofxOSCControl::saveSettings()
@@ -26,7 +22,7 @@ void ofxOSCControl::saveSettings()
 // Setup de l'OSC et du GUI
 void ofxOSCControl::setup()
 {
-    gui.setup("OSC controls", OSC_SETTINGS_FILE, 500, 10);
+    gui.setup("OSC controls", OSC_SETTINGS_FILE, 300, 10);
     gui.add(receivePortSlider.setup("Receive Port", 12345, 1024, 65535));
     gui.add(sendPortSlider.setup("Send Port", 54321, 1024, 65535));
     gui.add(receiveHostInput.setup("Receive Host", "127.0.0.1"));
@@ -48,10 +44,10 @@ void ofxOSCControl::setup()
 // Mise à jour de l'interface graphique
 void ofxOSCControl::update()
 {
-    if (bNewMessage)
+    bool expected = true;
+    if (std::atomic_compare_exchange_strong(&bNewMessage, &expected, false))
     {
-        // Traiter ici si nécessaire, vous pouvez aussi stocker les messages reçus pour les utiliser dans l'update.
-        bNewMessage = false;
+        // Traiter ici si nécessaire
     }
 }
 
@@ -113,8 +109,17 @@ void ofxOSCControl::threadedFunction()
                 {
                     int controlID = m.getArgAsInt(0);
                     float value = m.getArgAsFloat(1);
-                    setCameraControl(controlID, value);
-                    bNewMessage = true;
+
+                    // Traiter le message de manière thread-safe
+                    {
+                        std::lock_guard<std::mutex> lock(controlsMutex);
+                        if (controlID >= 0 && controlID < controls.size())
+                        {
+                            ASI_CONTROL_CAPS cap = controls[controlID];
+                            ASISetControlValue(cameraID, cap.ControlType, value, ASI_TRUE);
+                            std::atomic_store(&bNewMessage, true);
+                        }
+                    }
                 }
             }
         }
@@ -124,5 +129,25 @@ void ofxOSCControl::threadedFunction()
         }
 
         ofSleepMillis(10);
+    }
+}
+
+void ofxOSCControl::exit()
+{
+    stopThread();
+    waitForThread(true, 2000); // Timeout de 2 secondes pour la fermeture propre
+
+    try
+    {
+        saveSettings();
+        receiver.stop();
+        sender.clear();
+
+        std::lock_guard<std::mutex> lock(controlsMutex);
+        controls.clear();
+    }
+    catch (const std::exception &e)
+    {
+        ofLogError() << "Exception during exit: " << e.what();
     }
 }

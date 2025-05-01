@@ -9,6 +9,8 @@
 #include <atomic>
 #include <mutex>
 
+#define OFXASI_LOG_CAMERA 1
+
 class ofxOSCControl : public ofThread
 {
 public:
@@ -28,17 +30,19 @@ public:
     // Appliquer un contrôle à la caméra
     void setCameraControl(int controlID, float value);
 
-    void saveSettings();
+    void exit();
 
 protected:
     void threadedFunction() override;
 
 private:
+    void saveSettings();
+
     ofxOscReceiver receiver;
     ofxOscSender sender;
     std::vector<ASI_CONTROL_CAPS> controls;
     std::mutex controlsMutex;
-    int cameraID; // ID de la caméra
+    std::atomic<int> cameraID{-1};
     int receivePort;
     int sendPort;
     std::string receiveHost;

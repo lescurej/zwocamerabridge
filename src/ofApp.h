@@ -2,10 +2,10 @@
 
 #include "ofMain.h"
 #include "ASICamera2.h"
-#include "ofxSyphonServer.h"
 #include "ofxASICamera.h"
-#include "ofxASICameraGui.h"
 #include "ofxOSCControl.h"
+#include "LogPanel.h"
+#include "ofxASICameraManagerGui.h"
 
 class ofApp : public ofBaseApp
 {
@@ -17,8 +17,10 @@ public:
 	void exit() override;
 
 private:
-	ofxASICamera camera;
-	ofxSyphonServer syphonServer;
-	ofxASICameraGui cameraGui;
+	ofxASICameraManagerGui cameraManager;
+	LogPanel logPanel;
+
 	ofxOSCControl oscControl;
+
+	ofTexture cameraTexture;
 };

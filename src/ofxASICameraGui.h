@@ -4,41 +4,68 @@
 #include "ofMain.h"
 #include "ofxGui.h"
 #include "ofxASICamera.h"
+#include "ofxExclusiveToggleGroup.h"
 
 class ofxASICameraGui
 {
 public:
-    ofxASICameraGui();
-    ~ofxASICameraGui();
-    void setup(ofxASICamera &camera);
+    void setup(LogPanel *logPanel);
+    void connect(int _cameraIndex);
+    void disconnect();
     void draw();
     void update();
-    void saveSettings();
 
 private:
-    ofxPanel panel;
-    std::map<ASI_CONTROL_TYPE, ofParameter<int>> sliders;
-    std::map<ASI_CONTROL_TYPE, ofxToggle> autoToggles;
-    std::map<ASI_CONTROL_TYPE, std::string> controlNames;
+    LogPanel *logPanel = nullptr;
+    void log(ofLogLevel level, const std::string &message)
+    {
+        if (logPanel)
+        {
+            logPanel->addLog(message, level);
+        }
+    }
 
-    ofxASICamera *cam = nullptr;
-    bool initialized = false;
-
-    void onSliderChanged(int &value);
-    void onToggleChanged(bool &value);
-
-    // Ajout pour infos, binning et ROI
-    ofParameter<std::string> cameraInfo;
-    ofParameter<int> binParam;
-    ofParameter<int> roiX, roiY, roiW, roiH;
-    void onBinChanged(int &value);
-    void onROIChanged(int &);
-
-    // Ajout pour le mode caméra
-    ofParameter<int> cameraMode;
-    ofxButton softTriggerButton;
+    void onParamIntChanged(int &value);
+    void onParamBoolChanged(bool &value);
+    void onAutoParamChanged(bool &value);
+    void onResolutionChanged(int &);
+    void onImageTypeChanged(int &);
     void onModeChanged(int &mode);
     void onSoftTriggerPressed();
-    std::map<int, std::string> modeNames;
-    void setupModeNames();
+    void onStartCapturePressed();
+    void onStopCapturePressed();
+
+    ofxPanel panel;
+
+    std::map<ASI_CONTROL_TYPE, ofParameter<int>> intParams;
+    std::map<ASI_CONTROL_TYPE, ofParameter<bool>> boolParams;
+    std::map<ASI_CONTROL_TYPE, ofParameter<bool>> autoParams;
+
+    ofxASICamera camera;
+
+    ofxButton connectButton;
+    ofxButton disconnectButton;
+    ofxToggle autoConnectToggle;
+
+    // Paramètres de configuration
+    ofParameter<int> resolutionMaxWidth;
+    ofParameter<int> resolutionMaxHeight;
+    ofParameter<int> binParam;
+    ofxExclusiveToggleGroup imageTypeToggleGroup;
+    ofxExclusiveToggleGroup binToggleGroup;
+    ofxExclusiveToggleGroup modeToggleGroup;
+    ofxButton applySettingsButton;
+
+    // Camera info
+    ofxLabel cameraInfo;
+
+    bool isConnected = false;
+
+    // Camera mode
+    ofParameter<int> cameraMode;
+    ofxButton softTriggerButton;
+    std::string settingsFileName;
+
+    ofxButton startCaptureButton;
+    ofxButton stopCaptureButton;
 };

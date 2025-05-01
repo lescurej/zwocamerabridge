@@ -3,40 +3,39 @@
 //--------------------------------------------------------------
 void ofApp::setup()
 {
-    syphonServer.setName("ZWOCameraBridge");
-    cameraGui.setup(camera);
+    ofSetWindowTitle("ASI Camera");
+    ofSetVerticalSync(true);
+    ofSetFrameRate(60);
+
+    // Initialiser le panneau de logs
+    logPanel.setup("Log", 200);
+    logPanel.addLog("App started", OF_LOG_NOTICE);
+    cameraManager.setup(&logPanel);
     oscControl.setup();
 }
 
 //--------------------------------------------------------------
 void ofApp::update()
 {
-    cameraGui.update();
+    cameraManager.update();
     oscControl.update();
-    if (!camera.isConnected())
-    {
-        camera.setup(0, 1920, 1080, ASI_IMG_RAW8, &syphonServer);
-    }
 }
 
 //--------------------------------------------------------------
 void ofApp::draw()
 {
+    ofBackground(40);
+    // Dessiner le panneau de logs
+    cameraManager.draw();
     oscControl.draw();
-    cameraGui.draw();
-    if (camera.isConnected())
-    {
-        camera.draw(0, 0);
-    }
-    else
-    {
-        ofDrawBitmapString("Camera not connected", 10, 10);
-    }
+    logPanel.draw();
 }
 
 //--------------------------------------------------------------
 void ofApp::exit()
 {
-    cameraGui.saveSettings();
-    oscControl.saveSettings();
+
+    cameraManager.exit();
+    oscControl.exit();
+    logPanel.addLog("Camera disconnected", OF_LOG_NOTICE);
 }

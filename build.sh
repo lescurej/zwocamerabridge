@@ -66,5 +66,7 @@ install_name_tool -change \
   "@loader_path/../Frameworks/Syphon.framework/Versions/A/Syphon" \
   "${BIN_PATH}"
 
-otool -L "${BIN_PATH}"
+#otool -L "${BIN_ PATH}"
 
+cd "$SCRIPT_DIR/bin"
+zip -r "${APP_NAME}.zip" "${APP_NAME}.app"

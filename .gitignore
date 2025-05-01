@@ -1,6 +1,7 @@
 # Fichiers et dossiers générés par la compilation
 bin/
 obj/
+.continue
 
 .vscode/browse*
 

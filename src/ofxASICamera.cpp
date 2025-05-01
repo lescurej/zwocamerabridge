@@ -1,211 +1,451 @@
-#include "ofxASICamera.h"
+#ifndef OFXASI_LOG_CAMERA
+#define OFXASI_LOG_CAMERA 1
+#endif
 
-ofxASICamera::ofxASICamera() {}
+#include "ofxASICamera.h"
+#include <string>
+#include "cameraTools.h"
+
+ofxASICamera::ofxASICamera() : syphonServer(std::make_unique<ofxSyphonServer>()),
+                               syphonTexture(std::make_unique<ofTexture>())
+{
+}
 
 ofxASICamera::~ofxASICamera()
 {
     close();
 }
 
-bool ofxASICamera::setup(int index, int w, int h, ASI_IMG_TYPE type, ofxSyphonServer *syphonServer)
+void ofxASICamera::setup(LogPanel *logPanel)
 {
-    int numCams = ASIGetNumOfConnectedCameras();
-    if (numCams <= index)
-    {
-        // ofLogError("ofxASICamera") << "No camera at index " << index;
-        return false;
-    }
-
-    ASI_CAMERA_INFO info;
-    ASIGetCameraProperty(&info, index);
-    cameraID = info.CameraID;
-
-    if (ASIOpenCamera(cameraID) != ASI_SUCCESS)
-        return false;
-    if (ASIInitCamera(cameraID) != ASI_SUCCESS)
-        return false;
-
-    width = w;
-    height = h;
-    imgType = type;
-
-    this->syphonServer = syphonServer;
-
-    if (ASISetROIFormat(cameraID, width, height, 1, imgType) != ASI_SUCCESS)
-    {
-        ofLogError("ofxASICamera") << "Failed to set ROI format.";
-        return false;
-    }
-
-    pixelBuffer.resize(width * height); // RAW8 = 1 byte/pixel
-    texture.allocate(width, height, GL_LUMINANCE);
-
-    fetchControlCaps();
-
-    if (ASIStartVideoCapture(cameraID) != ASI_SUCCESS)
-    {
-        ofLogError("ofxASICamera") << "Failed to start video capture.";
-        return false;
-    }
-
-    connected = true;
-    startCaptureThread();
-    return true;
+    this->logPanel = logPanel;
 }
 
-void ofxASICamera::fetchControlCaps()
+void ofxASICamera::log(ofLogLevel level, const std::string &message) const
 {
+    std::shared_lock lock(logMutex);
+    if (logPanel)
+    {
+        logPanel->addLog(message, level);
+    }
+}
+
+std::optional<ASI_CAMERA_INFO> ofxASICamera::connect(int index)
+{
+    log(OF_LOG_NOTICE, "Connecting to camera " + ofToString(index));
+
+    int numCams = getNumConnectedCameras();
+    if (numCams <= index)
+    {
+        log(OF_LOG_ERROR, "No camera at index " + ofToString(index));
+        return std::nullopt;
+    }
+
+    ASI_CAMERA_INFO tempInfo;
+    ASI_ERROR_CODE err = ASIGetCameraProperty(&tempInfo, index);
+    if (err != ASI_SUCCESS)
+    {
+        log(OF_LOG_ERROR, "Failed to get camera property : " + decodeASIErrorCode(err));
+        return std::nullopt;
+    }
+
+    err = ASIOpenCamera(index);
+    if (err != ASI_SUCCESS)
+    {
+        log(OF_LOG_ERROR, "ASIOpenCamera failed: " + decodeASIErrorCode(err));
+        return std::nullopt;
+    }
+
+    err = ASIInitCamera(index);
+    if (err != ASI_SUCCESS)
+    {
+        ASICloseCamera(index);
+        log(OF_LOG_ERROR, "ASIInitCamera failed: " + decodeASIErrorCode(err));
+        return std::nullopt;
+    }
+
+    {
+        std::unique_lock lock(infoMutex);
+        info = tempInfo;
+    }
+
+    connected.store(true, std::memory_order_release);
+
+    log(OF_LOG_NOTICE, "Camera ID " + ofToString(tempInfo.CameraID) + " (" + std::string(tempInfo.Name) + "), " +
+                           ofToString(tempInfo.MaxWidth) + "x" + ofToString(tempInfo.MaxHeight));
+
+    controls = getCameraControlCaps();
+    return tempInfo;
+}
+
+std::future<void> ofxASICamera::startCaptureThread(ASI_IMG_TYPE type, int bin)
+{
+    if (!isConnected())
+    {
+        log(OF_LOG_ERROR, "startCaptureThread() : camera not connected.");
+        return std::future<void>();
+    }
+
+    ASI_CAMERA_INFO currentInfo;
+    {
+        std::shared_lock lock(infoMutex);
+        currentInfo = info;
+    }
+
+    {
+        std::unique_lock dimLock(dimensionMutex);
+        width = int(currentInfo.MaxWidth / bin);
+        height = int(currentInfo.MaxHeight / bin);
+        adjust_roi_size(width, height);
+    }
+
+    {
+        std::unique_lock typeLock(imgTypeMutex);
+        imgType = type;
+    }
+
+    {
+        std::unique_lock configLock(configMutex);
+        currentBin = bin;
+    }
+
+    // int iWidth,  the width of the ROI area. Make sure iWidth%8 == 0.
+    // int iHeight,  the height of the ROI area. Make sure iHeight%2 == 0,
+    // further, for USB2.0 camera ASI120, please make sure that iWidth*iHeight%1024=0.
+
+    auto err = ASISetROIFormat(currentInfo.CameraID, width, height, bin, type);
+    if (err != ASI_SUCCESS)
+    {
+        log(OF_LOG_ERROR, "Failed to set ROI format : " + decodeASIErrorCode(err));
+        return std::future<void>();
+    }
+
+    setupTextures();
+
+    err = ASIStartVideoCapture(currentInfo.CameraID);
+    if (err != ASI_SUCCESS)
+    {
+        log(OF_LOG_ERROR, "Failed to start video capture : " + decodeASIErrorCode(err));
+        return std::future<void>();
+    }
+
+    captureStartPromise = std::promise<void>();
+    auto future = captureStartPromise.get_future();
+
+    log(OF_LOG_NOTICE, "Starting capture thread...");
+    captureThread = std::make_unique<std::thread>(&ofxASICamera::captureLoop, this);
+    bCaptureRunning = true;
+
+    return future;
+}
+
+void ofxASICamera::captureLoop()
+{
+    ResourceGuard guard(bCaptureRunning);
+
+    const auto dimensions = getDimensions();
+
+    ASI_IMG_TYPE localImgType;
+    {
+        std::shared_lock typeLock(imgTypeMutex);
+        localImgType = imgType;
+    }
+
+    size_t bufferSize = dimensions.width * dimensions.height * bytesPerPixel(localImgType);
+    auto buffer = std::make_unique<unsigned char[]>(bufferSize);
+
+    captureStartPromise.set_value();
+
+    while (bCaptureRunning)
+    {
+        if (!isConnected())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
+
+        int waitMs = static_cast<int>(cachedExposure.load(std::memory_order_relaxed) * 2 / 1000 + 500);
+
+        ASI_ERROR_CODE err = ASIGetVideoData(getCameraID(), buffer.get(), bufferSize, waitMs);
+
+        if (err == ASI_SUCCESS)
+        {
+            auto processedBuffer = std::make_unique<unsigned char[]>(bufferSize);
+            std::memcpy(processedBuffer.get(), buffer.get(), bufferSize);
+
+            if (localImgType == ASI_IMG_RAW16)
+            {
+                auto buffer8 = std::make_unique<unsigned char[]>(dimensions.width * dimensions.height);
+                for (size_t i = 0; i < bufferSize; i += 2)
+                {
+                    buffer8[i / 2] = processedBuffer[i + 1];
+                }
+                processedBuffer = std::move(buffer8);
+            }
+
+            {
+                std::unique_lock displayLock(pixelsMutex);
+                latestPixels.setFromPixels(processedBuffer.get(), dimensions.width, dimensions.height, imageTypeToNumChannels(localImgType));
+                newFrameAvailable = true;
+            }
+
+            // {
+            //     std::unique_lock syphonLock(syphonMutex);
+            //     syphonTexture->loadData(processedBuffer.get(), dimensions.width, dimensions.height,
+            //                             getGLInternalFormat(localImgType));
+            //     syphonServer->publishTexture(syphonTexture.get());
+            // }
+
+            // {
+            //     std::unique_lock displayLock(displayMutex);
+            //     displayTexture->loadData(processedBuffer.get(), dimensions.width, dimensions.height,
+            //                              getGLInternalFormat(localImgType));
+            // }
+        }
+        else
+        {
+            log(OF_LOG_ERROR, "Failed to get video data: " + decodeASIErrorCode(err));
+        }
+
+        std::this_thread::sleep_for(std::chrono::microseconds(1));
+    }
+}
+
+void ofxASICamera::setupTextures()
+{
+
+    syphonTexture->allocate(width, height, getGLInternalFormat(imgType));
+    syphonServer->setName("ASI Camera:" + ofToString(info.CameraID));
+}
+
+void ofxASICamera::stopCaptureThread()
+{
+    if (!isCaptureRunning())
+        return;
+
+    bCaptureRunning.store(false, std::memory_order_release);
+
+    if (captureThread && captureThread->joinable())
+    {
+        try
+        {
+            captureThread->join();
+        }
+        catch (const std::exception &e)
+        {
+            log(OF_LOG_ERROR, "Error stopping capture thread: " + std::string(e.what()));
+        }
+    }
+    syphonTexture->clear();
+    captureThread.reset();
+}
+
+void ofxASICamera::close()
+{
+    log(OF_LOG_NOTICE, "Closing camera...");
+
+    stopCaptureThread();
+
+    if (isConnected())
+    {
+        const int cameraId = getCameraID();
+
+        ASI_ERROR_CODE err = ASIStopVideoCapture(cameraId);
+        if (err != ASI_SUCCESS)
+        {
+            log(OF_LOG_WARNING, "Error stopping video capture: " + decodeASIErrorCode(err));
+        }
+
+        err = ASICloseCamera(cameraId);
+        if (err != ASI_SUCCESS)
+        {
+            log(OF_LOG_WARNING, "Error closing camera: " + decodeASIErrorCode(err));
+        }
+    }
+
+    {
+        if (syphonTexture && syphonTexture->isAllocated())
+        {
+            syphonTexture->clear();
+        }
+    }
+
+    {
+        std::unique_lock dimLock(dimensionMutex);
+        width = height = 0;
+    }
+
+    {
+        std::unique_lock controlLock(controlsMutex);
+        controls.clear();
+    }
+
+    {
+        std::unique_lock infoLock(infoMutex);
+        info = ASI_CAMERA_INFO{};
+    }
+
+    connected.store(false, std::memory_order_release);
+    log(OF_LOG_NOTICE, "Camera disconnected");
+}
+
+std::__1::vector<ASI_CONTROL_CAPS> ofxASICamera::getCameraControlCaps()
+{
+    log(OF_LOG_NOTICE, "Fetching control caps...");
+    if (!connected)
+    {
+        log(OF_LOG_ERROR, "getCameraControlCaps() : camera not connected.");
+        return controls;
+    }
     int numControls = 0;
-    ASIGetNumOfControls(cameraID, &numControls);
+    auto err = ASIGetNumOfControls(info.CameraID, &numControls);
+    if (err != ASI_SUCCESS)
+    {
+        log(OF_LOG_ERROR, "Failed to get number of controls : " + decodeASIErrorCode(err));
+        return controls;
+    }
 
     controls.clear();
     for (int i = 0; i < numControls; ++i)
     {
         ASI_CONTROL_CAPS cap;
-        ASIGetControlCaps(cameraID, i, &cap);
+        ASIGetControlCaps(info.CameraID, i, &cap);
+        log(OF_LOG_NOTICE, "Contrôle " + ofToString(i) + ": " + std::string(cap.Name) +
+                               " [" + ofToString(cap.MinValue) + " - " + ofToString(cap.MaxValue) +
+                               "], défaut: " + ofToString(cap.DefaultValue));
         controls.push_back(cap);
     }
+    log(OF_LOG_NOTICE, "Control caps fetched");
+
+    return controls;
 }
 
-void ofxASICamera::startCaptureThread()
+void ofxASICamera::update()
 {
-    bCaptureRunning = true;
-    captureThread = std::thread(&ofxASICamera::captureLoop, this);
-}
+    if (!connected)
+        return;
 
-void ofxASICamera::stopCaptureThread()
-{
-    bCaptureRunning = false;
-    if (captureThread.joinable())
-        captureThread.join();
-}
-
-void ofxASICamera::captureLoop()
-{
-    while (bCaptureRunning)
+    if (newFrameAvailable.exchange(false))
     {
-        ASI_ERROR_CODE err = ASIGetVideoData(cameraID, pixelBuffer.data(), pixelBuffer.size(), 200 /*exposure*2+500ms*/);
-        if (err == ASI_SUCCESS)
         {
-            {
-                std::lock_guard<std::mutex> lock(bufferMutex);
-                texture.loadData(pixelBuffer.data(), width, height, GL_LUMINANCE);
-            }
-            bFrameNew = true;
-            if (onNewFrame)
-                onNewFrame();
-            if (syphonServer)
-                syphonServer->publishTexture(&texture);
+            std::lock_guard lock(pixelsMutex);
+            syphonTexture->loadData(latestPixels);
         }
-        else
-        {
-            bFrameNew = false;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        syphonServer->publishTexture(syphonTexture.get());
     }
-}
-
-void ofxASICamera::close()
-{
-    stopCaptureThread();
-
-    if (connected)
-    {
-        ASIStopVideoCapture(cameraID);
-        ASICloseCamera(cameraID);
-        connected = false;
-    }
-}
-
-bool ofxASICamera::isFrameNew() const
-{
-    return bFrameNew;
 }
 
 void ofxASICamera::draw(float x, float y)
 {
-    std::lock_guard<std::mutex> lock(bufferMutex);
-    if (texture.isAllocated())
-        texture.draw(x, y, width, height);
+    if (!connected || !syphonTexture->isAllocated())
+        return;
+
+    auto dimensions = getDimensions();
+
+    float drawWidth = dimensions.width;
+    float drawHeight = dimensions.height;
+
+    // Ajustement à la taille de la fenêtre
+    float maxWidth = ofGetWidth() * 0.9;
+    float maxHeight = ofGetHeight() * 0.9;
+
+    if (drawWidth > maxWidth || drawHeight > maxHeight)
+    {
+        float scale = std::min(maxWidth / drawWidth, maxHeight / drawHeight);
+        drawWidth *= scale;
+        drawHeight *= scale;
+    }
+
+    ofPushStyle();
+    ofSetColor(255);
+    // syphonTexture->draw(x, y, drawWidth, drawHeight);
+    ofPopStyle();
 }
 
-std::string ofxASICamera::getCameraName() const
+float ofxASICamera::getControlValue(ASI_CONTROL_TYPE type, bool *autoMode)
 {
-    ASI_CAMERA_INFO info;
-    ASIGetCameraProperty(&info, cameraID);
-    return std::string(info.Name);
-}
-
-int ofxASICamera::getControlValue(ASI_CONTROL_TYPE type, bool *autoMode)
-{
+    if (!connected)
+    {
+        log(OF_LOG_ERROR, "getControlValue() : camera not connected.");
+        return false;
+    }
     long val = 0;
     ASI_BOOL bAuto;
-    if (ASIGetControlValue(cameraID, type, &val, &bAuto) == ASI_SUCCESS)
+
+    auto err = ASIGetControlValue(info.CameraID, type, &val, &bAuto);
+
+    if (err != ASI_SUCCESS)
     {
-        if (autoMode)
-            *autoMode = (bAuto == ASI_TRUE);
-        return static_cast<int>(val);
+        log(OF_LOG_ERROR, "Failed to get control value: " + decodeASIErrorCode(err));
+        return -1;
     }
-    return -1;
+
+    if (autoMode)
+        *autoMode = (bAuto == ASI_TRUE);
+    // log(OF_LOG_NOTICE, "Control value: " + ofToString(val) + " for type: " + ofToString(type));
+    return (float)val;
 }
 
-void ofxASICamera::setControlValue(ASI_CONTROL_TYPE type, int value, bool autoMode)
+void ofxASICamera::setControlValue(ASI_CONTROL_TYPE type, float value, bool autoMode)
 {
-    ASISetControlValue(cameraID, type, value, autoMode ? ASI_TRUE : ASI_FALSE);
+    if (!connected)
+    {
+        log(OF_LOG_ERROR, "setControlValue() : camera not connected.");
+        return;
+    }
+
+    // log(OF_LOG_NOTICE, "Setting control value: " + ofToString(value) + " for type: " + ofToString(type));
+    auto err = ASISetControlValue(info.CameraID, type, (long)value, autoMode ? ASI_TRUE : ASI_FALSE);
+
+    if (err != ASI_SUCCESS)
+    {
+        log(OF_LOG_ERROR, "Failed to set control value: " + decodeASIErrorCode(err));
+        return;
+    }
+
+    if (type == ASI_EXPOSURE)
+    {
+        cachedExposure = value;
+    }
 }
 
-std::vector<ASI_CONTROL_CAPS> ofxASICamera::getAllControls() const
+std::vector<ASI_CONTROL_CAPS> ofxASICamera::getAllControls()
 {
+    if (!connected)
+    {
+        log(OF_LOG_ERROR, "getAllControls() : camera not connected.");
+        return {};
+    }
+    std::lock_guard<std::shared_mutex> lock(controlsMutex);
     return controls;
 }
 
-ASI_CAMERA_INFO ofxASICamera::getCameraInfo() const
+bool ofxASICamera::isTriggerCamera()
 {
-    ASI_CAMERA_INFO info;
-    ASIGetCameraProperty(&info, cameraID);
-    return info;
-}
-
-std::vector<int> ofxASICamera::getSupportedBins() const
-{
-    ASI_CAMERA_INFO info = getCameraInfo();
-    std::vector<int> bins;
-    for (int i = 0; i < 16 && info.SupportedBins[i] != 0; ++i)
-        bins.push_back(info.SupportedBins[i]);
-    return bins;
-}
-
-void ofxASICamera::setBinning(int bin)
-{
-    currentBin = bin;
-    ASISetROIFormat(cameraID, width, height, bin, imgType);
-}
-
-int ofxASICamera::getBinning() const
-{
-    return currentBin;
-}
-
-void ofxASICamera::setROI(int x, int y, int w, int h)
-{
-    ASISetStartPos(cameraID, x, y);
-    ASISetROIFormat(cameraID, w, h, getBinning(), imgType);
-}
-
-bool ofxASICamera::isTriggerCamera() const
-{
-    ASI_CAMERA_INFO info = getCameraInfo();
+    if (!connected)
+    {
+        log(OF_LOG_ERROR, "isTriggerCamera() : camera not connected.");
+        return false;
+    }
     return info.IsTriggerCam;
 }
 
-std::vector<ASI_CAMERA_MODE> ofxASICamera::getSupportedModes() const
+std::vector<ASI_CAMERA_MODE> ofxASICamera::getSupportedModes()
 {
+    if (!connected)
+    {
+        log(OF_LOG_ERROR, "getSupportedModes() : camera not connected.");
+        return {};
+    }
     std::vector<ASI_CAMERA_MODE> modes;
     if (!isTriggerCamera())
+    {
+        std::vector<ASI_CAMERA_MODE> modes = {ASI_MODE_NORMAL};
         return modes;
+    }
 
     ASI_SUPPORTED_MODE supportedMode;
-    if (ASIGetCameraSupportMode(cameraID, &supportedMode) == ASI_SUCCESS)
+    if (ASIGetCameraSupportMode(info.CameraID, &supportedMode) == ASI_SUCCESS)
     {
         for (int i = 0; i < 16 && supportedMode.SupportedCameraMode[i] != ASI_MODE_END; ++i)
         {
@@ -215,17 +455,19 @@ std::vector<ASI_CAMERA_MODE> ofxASICamera::getSupportedModes() const
     return modes;
 }
 
-ASI_CAMERA_MODE ofxASICamera::getCurrentMode() const
+ASI_CAMERA_MODE ofxASICamera::getCurrentMode()
 {
     if (!isTriggerCamera())
         return ASI_MODE_NORMAL;
 
     ASI_CAMERA_MODE mode;
-    if (ASIGetCameraMode(cameraID, &mode) == ASI_SUCCESS)
+    auto err = ASIGetCameraMode(info.CameraID, &mode);
+    if (err != ASI_SUCCESS)
     {
-        return mode;
+        log(OF_LOG_ERROR, "Failed to get camera mode: " + decodeASIErrorCode(err));
     }
-    return ASI_MODE_NORMAL;
+
+    return mode;
 }
 
 bool ofxASICamera::setMode(ASI_CAMERA_MODE mode)
@@ -233,7 +475,7 @@ bool ofxASICamera::setMode(ASI_CAMERA_MODE mode)
     if (!isTriggerCamera())
         return false;
 
-    if (ASISetCameraMode(cameraID, mode) == ASI_SUCCESS)
+    if (ASISetCameraMode(info.CameraID, mode) == ASI_SUCCESS)
     {
         currentMode = mode;
         return true;
@@ -245,5 +487,5 @@ bool ofxASICamera::sendSoftTrigger(bool start)
 {
     if (!isTriggerCamera())
         return false;
-    return ASISendSoftTrigger(cameraID, start ? ASI_TRUE : ASI_FALSE) == ASI_SUCCESS;
+    return ASISendSoftTrigger(info.CameraID, start ? ASI_TRUE : ASI_FALSE) == ASI_SUCCESS;
 }
