@@ -10,16 +10,14 @@ void ofxASICameraGui::setup(LogPanel *logPanel)
 
 void ofxASICameraGui::connect(int _cameraIndex)
 {
-    this->settingsFileName = "camera_" + ofToString(_cameraIndex) + ".xml";
-    panel.setup("ASI Camera Controls:" + ofToString(_cameraIndex), settingsFileName, 10, 200);
+    this->settingsFileName = "camera_" + ofToString(_cameraIndex) + ".json";
+    panel.setup("ASI Camera Controls:" + ofToString(_cameraIndex), settingsFileName, 500, 10);
 
-    startCaptureButton.setup("Start Capture");
-    panel.add(&startCaptureButton);
-    startCaptureButton.addListener(this, &ofxASICameraGui::onStartCapturePressed);
+    drawPreviewToggle.set("Draw Preview", true);
+    panel.add(drawPreviewToggle);
 
-    stopCaptureButton.setup("Stop Capture");
-    panel.add(&stopCaptureButton);
-    stopCaptureButton.addListener(this, &ofxASICameraGui::onStopCapturePressed);
+    fps.set("FPS", 0, 0, 240);
+    panel.add(fps);
 
     // Paramètres de configuration
     auto info = camera.connect(_cameraIndex);
@@ -41,11 +39,17 @@ void ofxASICameraGui::connect(int _cameraIndex)
     for (int i = 0; i < 16 && info->SupportedBins[i] != 0; ++i)
         bins.push_back(info->SupportedBins[i]);
     std::vector<std::string> binVec;
+
     for (auto bin : bins)
     {
-        binVec.push_back(getBin(bin - 1));
+        auto width = int(info->MaxWidth / bin);
+        auto height = int(info->MaxHeight / bin);
+        adjust_roi_size(width, height);
+        auto resolution = ofToString(width) + "x" + ofToString(height);
+        binVec.push_back(getBin(bin - 1) + " " + resolution);
     }
     binToggleGroup.setup("Binning", binVec, camera.getBinning());
+    binToggleGroup.getParameter().addListener(this, &ofxASICameraGui::onBinningChanged);
     panel.add(&binToggleGroup);
 
     // Affichage des infos caméra
@@ -107,12 +111,12 @@ void ofxASICameraGui::connect(int _cameraIndex)
             ASI_COOLER_POWER_PERC,
         };
 
+        const std::vector<ASI_CONTROL_TYPE> boolParamsType = {ASI_HARDWARE_BIN, ASI_HIGH_SPEED_MODE, ASI_COOLER_ON, ASI_MONO_BIN, ASI_FAN_ON, ASI_ANTI_DEW_HEATER};
+
         auto isIntControl = [&intParamsType](ASI_CONTROL_TYPE type) -> bool
         {
             return std::find(intParamsType.begin(), intParamsType.end(), type) != intParamsType.end();
         };
-
-        const std::vector<ASI_CONTROL_TYPE> boolParamsType = {ASI_HARDWARE_BIN, ASI_HIGH_SPEED_MODE, ASI_COOLER_ON, ASI_MONO_BIN, ASI_FAN_ON, ASI_ANTI_DEW_HEATER};
 
         auto isBooleanControl = [&boolParamsType](ASI_CONTROL_TYPE type) -> bool
         {
@@ -159,19 +163,29 @@ void ofxASICameraGui::disconnect()
     isConnected = false;
     if (camera.isConnected())
     {
+        log(OF_LOG_NOTICE, "Disconnecting camera");
         camera.close();
     }
     panel.saveToFile(settingsFileName);
-}
 
-void ofxASICameraGui::onResolutionChanged(int &)
-{
-    // Les changements seront appliqués lors de l'appui sur le bouton Appliquer
-}
+    imageTypeToggleGroup.getParameter().removeListener(this, &ofxASICameraGui::onImageTypeChanged);
 
-void ofxASICameraGui::onImageTypeChanged(int &)
-{
-    // Les changements seront appliqués lors de l'appui sur le bouton Appliquer
+    modeToggleGroup.getParameter().removeListener(this, &ofxASICameraGui::onModeChanged);
+
+    softTriggerButton.removeListener(this, &ofxASICameraGui::onSoftTriggerPressed);
+
+    for (auto &[type, param] : intParams)
+    {
+        param.removeListener(this, &ofxASICameraGui::onParamIntChanged);
+    }
+    for (auto &[type, param] : boolParams)
+    {
+        param.removeListener(this, &ofxASICameraGui::onParamBoolChanged);
+    }
+    for (auto &[type, toggle] : autoParams)
+    {
+        toggle.removeListener(this, &ofxASICameraGui::onAutoParamChanged);
+    }
 }
 
 void ofxASICameraGui::update()
@@ -180,6 +194,7 @@ void ofxASICameraGui::update()
         return;
     if (camera.isCaptureRunning())
     {
+        fps = camera.getFPS();
         camera.update();
     }
 
@@ -207,7 +222,7 @@ void ofxASICameraGui::draw()
 {
     if (!isConnected)
         return;
-    if (camera.isCaptureRunning())
+    if (camera.isCaptureRunning() && drawPreviewToggle.get())
     {
         camera.draw(0, 0);
     }
@@ -281,18 +296,33 @@ void ofxASICameraGui::onSoftTriggerPressed()
     }
 }
 
-void ofxASICameraGui::onStartCapturePressed()
+void ofxASICameraGui::startCapture()
 {
     if (camera.isConnected())
     {
-        camera.startCaptureThread(getImageTypeFromInt(imageTypeToggleGroup.getParameter()), binToggleGroup.getParameter() + 1);
+        auto width = int(resolutionMaxWidth / (binToggleGroup.getSelectedIndex() + 1));
+        auto height = int(resolutionMaxHeight / (binToggleGroup.getSelectedIndex() + 1));
+        adjust_roi_size(width, height);
+        camera.startCaptureThread(width, height, getImageTypeFromInt(imageTypeToggleGroup.getSelectedIndex()), binToggleGroup.getSelectedIndex() + 1);
     }
 }
 
-void ofxASICameraGui::onStopCapturePressed()
+void ofxASICameraGui::stopCapture()
 {
     if (camera.isConnected())
     {
         camera.stopCaptureThread();
     }
+}
+
+void ofxASICameraGui::onBinningChanged(int &)
+{
+    stopCapture();
+    startCapture();
+}
+
+void ofxASICameraGui::onImageTypeChanged(int &)
+{
+    stopCapture();
+    startCapture();
 }

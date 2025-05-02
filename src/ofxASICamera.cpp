@@ -6,8 +6,7 @@
 #include <string>
 #include "cameraTools.h"
 
-ofxASICamera::ofxASICamera() : syphonServer(std::make_unique<ofxSyphonServer>()),
-                               syphonTexture(std::make_unique<ofTexture>())
+ofxASICamera::ofxASICamera()
 {
 }
 
@@ -78,7 +77,7 @@ std::optional<ASI_CAMERA_INFO> ofxASICamera::connect(int index)
     return tempInfo;
 }
 
-std::future<void> ofxASICamera::startCaptureThread(ASI_IMG_TYPE type, int bin)
+std::future<void> ofxASICamera::startCaptureThread(int _width, int _height, ASI_IMG_TYPE type, int bin)
 {
     if (!isConnected())
     {
@@ -94,9 +93,10 @@ std::future<void> ofxASICamera::startCaptureThread(ASI_IMG_TYPE type, int bin)
 
     {
         std::unique_lock dimLock(dimensionMutex);
-        width = int(currentInfo.MaxWidth / bin);
-        height = int(currentInfo.MaxHeight / bin);
-        adjust_roi_size(width, height);
+        log(OF_LOG_NOTICE, "Bin " + ofToString(bin));
+        width = _width;
+        height = _height;
+        log(OF_LOG_NOTICE, "Setting ROI to " + ofToString(width) + "x" + ofToString(height));
     }
 
     {
@@ -141,6 +141,11 @@ std::future<void> ofxASICamera::startCaptureThread(ASI_IMG_TYPE type, int bin)
 
 void ofxASICamera::captureLoop()
 {
+
+    auto lastTime = std::chrono::steady_clock::now();
+    int frameCount = 0;
+    float fps = 0.0f;
+
     ResourceGuard guard(bCaptureRunning);
 
     const auto dimensions = getDimensions();
@@ -189,18 +194,19 @@ void ofxASICamera::captureLoop()
                 newFrameAvailable = true;
             }
 
-            // {
-            //     std::unique_lock syphonLock(syphonMutex);
-            //     syphonTexture->loadData(processedBuffer.get(), dimensions.width, dimensions.height,
-            //                             getGLInternalFormat(localImgType));
-            //     syphonServer->publishTexture(syphonTexture.get());
-            // }
+            frameCount++;
 
-            // {
-            //     std::unique_lock displayLock(displayMutex);
-            //     displayTexture->loadData(processedBuffer.get(), dimensions.width, dimensions.height,
-            //                              getGLInternalFormat(localImgType));
-            // }
+            auto now = std::chrono::steady_clock::now();
+            std::chrono::duration<float> elapsed = now - lastTime;
+
+            if (elapsed.count() >= 1.0f)
+            {
+                fps = frameCount / elapsed.count();
+                frameCount = 0;
+                lastTime = now;
+
+                currentFPS.store(fps, std::memory_order_relaxed);
+            }
         }
         else
         {
@@ -214,6 +220,16 @@ void ofxASICamera::captureLoop()
 void ofxASICamera::setupTextures()
 {
 
+    syphonServer.reset();
+    if (syphonTexture)
+    {
+        syphonTexture->clear();
+    }
+    syphonTexture.reset();
+
+    syphonTexture = std::make_unique<ofTexture>();
+    syphonServer = std::make_unique<ofxSyphonServer>();
+    log(OF_LOG_NOTICE, "Allocating texture for " + ofToString(width) + "x" + ofToString(height));
     syphonTexture->allocate(width, height, getGLInternalFormat(imgType));
     syphonServer->setName("ASI Camera:" + ofToString(info.CameraID));
 }
@@ -236,7 +252,29 @@ void ofxASICamera::stopCaptureThread()
             log(OF_LOG_ERROR, "Error stopping capture thread: " + std::string(e.what()));
         }
     }
-    syphonTexture->clear();
+    {
+        if (syphonTexture)
+        {
+            log(OF_LOG_NOTICE, "Resetting syphon texture");
+            syphonTexture->clear();
+            syphonTexture.reset();
+        }
+        if (syphonServer)
+        {
+            log(OF_LOG_NOTICE, "Resetting syphon server");
+            syphonServer.reset();
+        }
+    }
+    {
+        std::unique_lock dimLock(dimensionMutex);
+        width = height = 0;
+    }
+
+    ASI_ERROR_CODE err = ASIStopVideoCapture(getCameraID());
+    if (err != ASI_SUCCESS)
+    {
+        log(OF_LOG_WARNING, "Error stopping video capture: " + decodeASIErrorCode(err));
+    }
     captureThread.reset();
 }
 
@@ -248,31 +286,12 @@ void ofxASICamera::close()
 
     if (isConnected())
     {
-        const int cameraId = getCameraID();
 
-        ASI_ERROR_CODE err = ASIStopVideoCapture(cameraId);
-        if (err != ASI_SUCCESS)
-        {
-            log(OF_LOG_WARNING, "Error stopping video capture: " + decodeASIErrorCode(err));
-        }
-
-        err = ASICloseCamera(cameraId);
+        auto err = ASICloseCamera(getCameraID());
         if (err != ASI_SUCCESS)
         {
             log(OF_LOG_WARNING, "Error closing camera: " + decodeASIErrorCode(err));
         }
-    }
-
-    {
-        if (syphonTexture && syphonTexture->isAllocated())
-        {
-            syphonTexture->clear();
-        }
-    }
-
-    {
-        std::unique_lock dimLock(dimensionMutex);
-        width = height = 0;
     }
 
     {
@@ -310,9 +329,9 @@ std::__1::vector<ASI_CONTROL_CAPS> ofxASICamera::getCameraControlCaps()
     {
         ASI_CONTROL_CAPS cap;
         ASIGetControlCaps(info.CameraID, i, &cap);
-        log(OF_LOG_NOTICE, "Contrôle " + ofToString(i) + ": " + std::string(cap.Name) +
+        log(OF_LOG_NOTICE, "Control " + ofToString(i) + ": " + std::string(cap.Name) +
                                " [" + ofToString(cap.MinValue) + " - " + ofToString(cap.MaxValue) +
-                               "], défaut: " + ofToString(cap.DefaultValue));
+                               "], default: " + ofToString(cap.DefaultValue));
         controls.push_back(cap);
     }
     log(OF_LOG_NOTICE, "Control caps fetched");
@@ -327,6 +346,12 @@ void ofxASICamera::update()
 
     if (newFrameAvailable.exchange(false))
     {
+        if (!syphonTexture || !syphonServer)
+        {
+            log(OF_LOG_ERROR, "syphonTexture or syphonServer is not initialized");
+            return;
+        }
+
         {
             std::lock_guard lock(pixelsMutex);
             syphonTexture->loadData(latestPixels);
@@ -337,7 +362,7 @@ void ofxASICamera::update()
 
 void ofxASICamera::draw(float x, float y)
 {
-    if (!connected || !syphonTexture->isAllocated())
+    if (!connected || syphonTexture == nullptr || !syphonTexture->isAllocated())
         return;
 
     auto dimensions = getDimensions();
@@ -358,7 +383,7 @@ void ofxASICamera::draw(float x, float y)
 
     ofPushStyle();
     ofSetColor(255);
-    // syphonTexture->draw(x, y, drawWidth, drawHeight);
+    syphonTexture->draw(x, y, drawWidth, drawHeight);
     ofPopStyle();
 }
 
@@ -394,12 +419,17 @@ void ofxASICamera::setControlValue(ASI_CONTROL_TYPE type, float value, bool auto
         return;
     }
 
+    if (type == ASI_COOLER_POWER_PERC)
+    {
+        return;
+    }
+
     // log(OF_LOG_NOTICE, "Setting control value: " + ofToString(value) + " for type: " + ofToString(type));
     auto err = ASISetControlValue(info.CameraID, type, (long)value, autoMode ? ASI_TRUE : ASI_FALSE);
 
     if (err != ASI_SUCCESS)
     {
-        log(OF_LOG_ERROR, "Failed to set control value: " + decodeASIErrorCode(err));
+        log(OF_LOG_ERROR, "Failed to set control value: " + getControlType(type) + " to " + ofToString(value) + " : " + decodeASIErrorCode(err));
         return;
     }
 
@@ -407,6 +437,7 @@ void ofxASICamera::setControlValue(ASI_CONTROL_TYPE type, float value, bool auto
     {
         cachedExposure = value;
     }
+    // log(OF_LOG_NOTICE, "Control value set: " + getControlType(type) + " to " + ofToString(value));
 }
 
 std::vector<ASI_CONTROL_CAPS> ofxASICamera::getAllControls()

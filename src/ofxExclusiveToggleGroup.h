@@ -9,83 +9,59 @@ public:
     {
         this->setName(name);
         parameters.clear();
-        toggles.clear();
+        comboBox.clear();
 
-        if (labels.empty())
-        {
-            ofLogWarning() << "ofxExclusiveToggleGroup::setup - No labels provided";
-            return;
-        }
+        // Initialiser la sélection par défaut
+        currentIndex.set(name, defaultIndex, 0, labels.size() - 1);
+        currentIndex.addListener(this, &ofxExclusiveToggleGroup::onIndexChanded);
+        parameters.add(currentIndex);
+        this->add(currentIndex);
 
+        // Créer les éléments du comboBox
         for (size_t i = 0; i < labels.size(); ++i)
         {
             ofParameter<bool> p;
-            p.set(labels[i], i == defaultIndex);
-            p.addListener(this, &ofxExclusiveToggleGroup::onToggleChanged);
+            p.set(labels[i], i == currentIndex);
+            p.addListener(this, &ofxExclusiveToggleGroup::onOptionChanged);
             parameters.add(p);
-            toggles.push_back(p);
+            comboBox.push_back(p);
         }
 
+        // Setup du groupe de paramètres
         ofxGuiGroup::setup(parameters);
-        currentIndex = defaultIndex;
-
-        selectedLabel.set("Selected", toggles[currentIndex].getName());
-        parameters.add(selectedLabel);
     }
 
-    int getSelectedIndex() const
-    {
-        return currentIndex;
-    }
-
-    std::string getSelectedLabel() const
-    {
-        return selectedLabel.get();
-    }
-
-    ofParameter<int> &getParameter()
-    {
-        return currentIndex;
-    }
-
-    void clear()
-    {
-        for (auto &p : toggles)
-        {
-            p.removeListener(this, &ofxExclusiveToggleGroup::onToggleChanged);
-        }
-        toggles.clear();
-        parameters.clear();
-        ofxGuiGroup::clear();
-    }
+    ofParameter<int> &getParameter() { return currentIndex; }
+    int getSelectedIndex() const { return currentIndex.get(); }
+    std::string getSelectedLabel() const { return comboBox[currentIndex.get()].getName(); }
 
 private:
     ofParameterGroup parameters;
-    std::vector<ofParameter<bool>> toggles;
-    ofParameter<std::string> selectedLabel;
-    ofParameter<int> currentIndex = 0;
+    std::vector<ofParameter<bool>> comboBox;
+    ofParameter<int> currentIndex;
 
-    void onToggleChanged(bool &value)
+    void onOptionChanged(bool &value)
     {
-        if (!value)
-            return;
-
-        for (size_t i = 0; i < toggles.size(); ++i)
+        if (value)
         {
-            if (toggles[i].get() && i != currentIndex)
+            for (size_t i = 0; i < comboBox.size(); ++i)
             {
-                toggles[currentIndex].removeListener(this, &ofxExclusiveToggleGroup::onToggleChanged);
-                toggles[currentIndex].set(false);
-                toggles[currentIndex].addListener(this, &ofxExclusiveToggleGroup::onToggleChanged);
-                currentIndex = i;
-                selectedLabel = toggles[i].getName(); // mise à jour automatique de l'affichage
+                if (&comboBox[i].get() == &value) // comparer l'adresse du bool
+                {
+                    currentIndex = static_cast<int>(i);
+                    break;
+                }
             }
-            else if (i != currentIndex)
-            {
-                toggles[i].removeListener(this, &ofxExclusiveToggleGroup::onToggleChanged);
-                toggles[i].set(false);
-                toggles[i].addListener(this, &ofxExclusiveToggleGroup::onToggleChanged);
-            }
+        }
+    }
+
+    void onIndexChanded(int &value)
+    {
+        for (size_t i = 0; i < comboBox.size(); ++i)
+        {
+            comboBox[i].removeListener(this, &ofxExclusiveToggleGroup::onOptionChanged);
+            comboBox[i].set(i == static_cast<size_t>(value));
+            comboBox[i].addListener(this, &ofxExclusiveToggleGroup::onOptionChanged);
         }
     }
 };

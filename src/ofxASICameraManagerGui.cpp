@@ -1,12 +1,12 @@
 #include "ofxASICameraManagerGui.h"
 #include "cameraTools.h"
-#define CAMERA_SETTINGS_FILE "camera_manager.xml"
+#define CAMERA_SETTINGS_FILE "camera_manager.json"
 
 void ofxASICameraManagerGui::setup(LogPanel *_logPanel)
 {
     this->logPanel = _logPanel;
 
-    panel.setup("ASI Camera Controls", CAMERA_SETTINGS_FILE, 10, 10);
+    panel.setup("ASI Camera Connection", CAMERA_SETTINGS_FILE, 10, 10);
 
     // Paramètres de connexion
     auto numCamera = getNumConnectedCameras();

@@ -192,15 +192,9 @@ static std::string getRollingInterval(int interval)
 
 static void adjust_roi_size(int &iWidth, int &iHeight)
 {
-    // Ensure width is a multiple of 8
-    while (iWidth % 8 != 0)
-    {
-        iWidth -= 1; // Add 1 to make it divisible by 8
-    }
+    // Round width down to nearest multiple of 8
+    iWidth = (iWidth / 8) * 8;
 
-    // Ensure height is even
-    while (iHeight % 2 != 0)
-    {
-        iHeight -= 1; // Increment by 1 if not even, then check again
-    }
+    // Round height down to nearest even number
+    iHeight = (iHeight / 2) * 2;
 }

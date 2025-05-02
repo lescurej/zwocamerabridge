@@ -28,12 +28,12 @@ private:
     void onParamIntChanged(int &value);
     void onParamBoolChanged(bool &value);
     void onAutoParamChanged(bool &value);
-    void onResolutionChanged(int &);
+    void onBinningChanged(int &);
     void onImageTypeChanged(int &);
     void onModeChanged(int &mode);
     void onSoftTriggerPressed();
-    void onStartCapturePressed();
-    void onStopCapturePressed();
+    void startCapture();
+    void stopCapture();
 
     ofxPanel panel;
 
@@ -41,11 +41,14 @@ private:
     std::map<ASI_CONTROL_TYPE, ofParameter<bool>> boolParams;
     std::map<ASI_CONTROL_TYPE, ofParameter<bool>> autoParams;
 
+    ofParameter<float> fps;
+
     ofxASICamera camera;
 
     ofxButton connectButton;
     ofxButton disconnectButton;
     ofxToggle autoConnectToggle;
+    ofParameter<bool> drawPreviewToggle;
 
     // Paramètres de configuration
     ofParameter<int> resolutionMaxWidth;
@@ -65,7 +68,4 @@ private:
     ofParameter<int> cameraMode;
     ofxButton softTriggerButton;
     std::string settingsFileName;
-
-    ofxButton startCaptureButton;
-    ofxButton stopCaptureButton;
 };

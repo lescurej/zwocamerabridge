@@ -1,5 +1,5 @@
 #include "ofxOSCControl.h"
-#define OSC_SETTINGS_FILE "osc.xml"
+#define OSC_SETTINGS_FILE "osc.json"
 
 // Constructeur
 ofxOSCControl::ofxOSCControl()
@@ -22,7 +22,7 @@ void ofxOSCControl::saveSettings()
 // Setup de l'OSC et du GUI
 void ofxOSCControl::setup()
 {
-    gui.setup("OSC controls", OSC_SETTINGS_FILE, 300, 10);
+    gui.setup("OSC controls", OSC_SETTINGS_FILE, 250, 10);
     gui.add(receivePortSlider.setup("Receive Port", 12345, 1024, 65535));
     gui.add(sendPortSlider.setup("Send Port", 54321, 1024, 65535));
     gui.add(receiveHostInput.setup("Receive Host", "127.0.0.1"));

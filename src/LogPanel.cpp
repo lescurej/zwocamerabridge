@@ -3,7 +3,7 @@
 void LogPanel::setup(string panelName, int maxLines)
 {
     this->maxLines = maxLines;
-    panel.setup(panelName, "", 600, 10);
+    panel.setup(panelName, "", 800, 10);
     panel.add(clearButton.setup("Clear"));
     clearButton.addListener(this, &LogPanel::clear);
 }

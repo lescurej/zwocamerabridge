@@ -70,10 +70,17 @@ public:
     bool setMode(ASI_CAMERA_MODE mode);
     bool sendSoftTrigger(bool start = true);
 
-    std::future<void> startCaptureThread(ASI_IMG_TYPE type, int bin);
+    std::future<void> startCaptureThread(int _width, int _height, ASI_IMG_TYPE type, int bin);
     void stopCaptureThread();
 
+    float getFPS() const
+    {
+        return currentFPS.load();
+    }
+
 private:
+    std::atomic<float> currentFPS;
+
     std::vector<ASI_CONTROL_CAPS> getCameraControlCaps();
 
     mutable std::shared_mutex infoMutex;

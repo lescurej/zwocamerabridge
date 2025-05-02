@@ -12,6 +12,20 @@ void ofApp::setup()
     logPanel.addLog("App started", OF_LOG_NOTICE);
     cameraManager.setup(&logPanel);
     oscControl.setup();
+
+    // Crée un chemin absolu vers le dossier à partir de data/
+    std::string fullPath = ofToDataPath(".", true);
+    // Utilise ofDirectory pour vérifier et créer si besoin
+    ofDirectory dir(fullPath);
+    if (!dir.exists())
+    {
+        dir.create(true); // true = création récursive si besoin
+        ofLogNotice() << "Folder '" << fullPath << "' created";
+    }
+    else
+    {
+        ofLogNotice() << "Folder '" << fullPath << "' already exists";
+    }
 }
 
 //--------------------------------------------------------------
