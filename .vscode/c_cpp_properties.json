@@ -3,6 +3,7 @@
         {
             "name": "Mac",
             "includePath": [
+                "${workspaceRoot}/src/**",
                 "${workspaceRoot}/../../../addons/ofxOsc/libs/oscpack/src/**",
                 "${workspaceRoot}/../../../addons/ofxOsc/src/**",
                 "${workspaceRoot}/../../../addons/ofxGui/src/**",

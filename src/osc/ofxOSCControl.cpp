@@ -135,8 +135,7 @@ void ofxOSCControl::threadedFunction()
 void ofxOSCControl::exit()
 {
     stopThread();
-    waitForThread(true, 2000); // Timeout de 2 secondes pour la fermeture propre
-
+    waitForThread(true, 500);
     try
     {
         saveSettings();

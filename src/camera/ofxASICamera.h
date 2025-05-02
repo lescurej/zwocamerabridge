@@ -57,12 +57,6 @@ public:
         return info.CameraID;
     }
 
-    int getBinning() const noexcept
-    {
-        std::shared_lock lock(configMutex);
-        return currentBin;
-    }
-
     // Camera mode methods
     bool isTriggerCamera();
     std::vector<ASI_CAMERA_MODE> getSupportedModes();
@@ -115,8 +109,6 @@ private:
 
     void captureLoop();
 
-    mutable std::shared_mutex configMutex;
-    int currentBin{1};
     ASI_CAMERA_MODE currentMode{ASI_MODE_NORMAL};
     std::atomic<long> cachedExposure{10000}; // Default in µs
 

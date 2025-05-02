@@ -43,6 +43,11 @@ private:
 
     ofParameter<float> fps;
 
+    std::unique_ptr<std::thread> updateControlsThread;
+
+    void updateControlLoop();
+    mutable std::shared_mutex updateControlsMutex;
+
     ofxASICamera camera;
 
     ofxButton connectButton;

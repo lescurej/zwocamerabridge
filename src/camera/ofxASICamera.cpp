@@ -104,12 +104,7 @@ std::future<void> ofxASICamera::startCaptureThread(int _width, int _height, ASI_
         imgType = type;
     }
 
-    {
-        std::unique_lock configLock(configMutex);
-        currentBin = bin;
-    }
-
-    // int iWidth,  the width of the ROI area. Make sure iWidth%8 == 0.
+       // int iWidth,  the width of the ROI area. Make sure iWidth%8 == 0.
     // int iHeight,  the height of the ROI area. Make sure iHeight%2 == 0,
     // further, for USB2.0 camera ASI120, please make sure that iWidth*iHeight%1024=0.
 

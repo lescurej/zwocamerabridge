@@ -6,6 +6,7 @@ void ofxASICameraGui::setup(LogPanel *logPanel)
 {
     this->logPanel = logPanel;
     camera.setup(logPanel);
+    updateControlsThread = std::make_unique<std::thread>(&ofxASICameraGui::updateControlLoop, this);
 }
 
 void ofxASICameraGui::connect(int _cameraIndex)
@@ -48,7 +49,7 @@ void ofxASICameraGui::connect(int _cameraIndex)
         auto resolution = ofToString(width) + "x" + ofToString(height);
         binVec.push_back(getBin(bin - 1) + " " + resolution);
     }
-    binToggleGroup.setup("Binning", binVec, camera.getBinning());
+    binToggleGroup.setup("Binning", binVec, 0);
     binToggleGroup.getParameter().addListener(this, &ofxASICameraGui::onBinningChanged);
     panel.add(&binToggleGroup);
 
@@ -86,9 +87,13 @@ void ofxASICameraGui::connect(int _cameraIndex)
 
     auto controls = camera.getAllControls();
     log(OF_LOG_NOTICE, "number of controls: " + ofToString(controls.size()));
-    intParams.clear();
-    boolParams.clear();
-    autoParams.clear();
+    {
+        std::shared_lock controlLock(updateControlsMutex);
+
+        intParams.clear();
+        boolParams.clear();
+        autoParams.clear();
+    }
     for (const auto &cap : controls)
     {
         bool bAuto;
@@ -132,26 +137,32 @@ void ofxASICameraGui::connect(int _cameraIndex)
         }
         else
         {
-            auto &param = intParams[cap.ControlType];
-            if (cap.ControlType == ASI_EXPOSURE)
             {
-                param.set(cap.Name, currentValue, cap.MinValue, 5000);
+                std::shared_lock controlLock(updateControlsMutex);
+                auto &param = intParams[cap.ControlType];
+                if (cap.ControlType == ASI_EXPOSURE)
+                {
+                    param.set(cap.Name, currentValue, cap.MinValue, 5000);
+                }
+                else
+                {
+                    param.set(cap.Name, currentValue, cap.MinValue, cap.MaxValue);
+                }
+                param.addListener(this, &ofxASICameraGui::onParamIntChanged);
+                panel.add(param);
             }
-            else
-            {
-                param.set(cap.Name, currentValue, cap.MinValue, cap.MaxValue);
-            }
-            param.addListener(this, &ofxASICameraGui::onParamIntChanged);
-            panel.add(param);
         }
 
         if (cap.IsAutoSupported)
         {
-            auto name = std::string("Auto_") + cap.Name;
-            auto &toggle = autoParams[cap.ControlType];
-            toggle.set(name, bAuto);
-            toggle.addListener(this, &ofxASICameraGui::onAutoParamChanged);
-            panel.add(toggle);
+            {
+                std::shared_lock controlLock(updateControlsMutex);
+                auto name = std::string("Auto_") + cap.Name;
+                auto &toggle = autoParams[cap.ControlType];
+                toggle.set(name, bAuto);
+                toggle.addListener(this, &ofxASICameraGui::onAutoParamChanged);
+                panel.add(toggle);
+            }
         }
     }
     panel.loadFromFile(settingsFileName);
@@ -160,7 +171,20 @@ void ofxASICameraGui::connect(int _cameraIndex)
 
 void ofxASICameraGui::disconnect()
 {
+
     isConnected = false;
+    if (updateControlsThread && updateControlsThread->joinable())
+    {
+        try
+        {
+            updateControlsThread->join();
+        }
+        catch (const std::exception &e)
+        {
+            log(OF_LOG_ERROR, "Error stopping update controls thread: " + std::string(e.what()));
+        }
+    }
+
     if (camera.isConnected())
     {
         log(OF_LOG_NOTICE, "Disconnecting camera");
@@ -174,17 +198,20 @@ void ofxASICameraGui::disconnect()
 
     softTriggerButton.removeListener(this, &ofxASICameraGui::onSoftTriggerPressed);
 
-    for (auto &[type, param] : intParams)
     {
-        param.removeListener(this, &ofxASICameraGui::onParamIntChanged);
-    }
-    for (auto &[type, param] : boolParams)
-    {
-        param.removeListener(this, &ofxASICameraGui::onParamBoolChanged);
-    }
-    for (auto &[type, toggle] : autoParams)
-    {
-        toggle.removeListener(this, &ofxASICameraGui::onAutoParamChanged);
+        std::shared_lock controlLock(updateControlsMutex);
+        for (auto &[type, param] : intParams)
+        {
+            param.removeListener(this, &ofxASICameraGui::onParamIntChanged);
+        }
+        for (auto &[type, param] : boolParams)
+        {
+            param.removeListener(this, &ofxASICameraGui::onParamBoolChanged);
+        }
+        for (auto &[type, toggle] : autoParams)
+        {
+            toggle.removeListener(this, &ofxASICameraGui::onAutoParamChanged);
+        }
     }
 }
 
@@ -197,25 +224,6 @@ void ofxASICameraGui::update()
         fps = camera.getFPS();
         camera.update();
     }
-
-    // // Update mode display if needed
-    // if (camera.isTriggerCamera())
-    // {
-    //     ASI_CAMERA_MODE currentMode = camera.getCurrentMode();
-    //     cameraMode.setWithoutEventNotifications(static_cast<int>(currentMode));
-    // }
-
-    // for (auto &[type, param] : sliders)
-    // {
-    //     bool autoMode;
-    //     int val = camera.getControlValue(type, &autoMode);
-    //     param.setWithoutEventNotifications(val);
-
-    //     if (autoToggles.count(type))
-    //     {
-    //         autoToggles[type] = autoMode;
-    //     }
-    // }
 }
 
 void ofxASICameraGui::draw()
@@ -231,49 +239,56 @@ void ofxASICameraGui::draw()
 
 void ofxASICameraGui::onParamIntChanged(int &value)
 {
-
-    for (auto &[type, param] : intParams)
     {
-        if (&param.get() == &value)
+        std::shared_lock controlLock(updateControlsMutex);
+        for (auto &[type, param] : intParams)
         {
-            bool autoMode = false;
-            if (autoParams.count(type))
+            if (&param.get() == &value)
             {
-                autoMode = autoParams[type];
+                bool autoMode = false;
+                if (autoParams.count(type))
+                {
+                    autoMode = autoParams[type];
+                }
+                camera.setControlValue(type, (float)value, autoMode);
+                break;
             }
-            camera.setControlValue(type, (float)value, autoMode);
-            break;
         }
     }
 }
 
 void ofxASICameraGui::onParamBoolChanged(bool &value)
 {
-    for (auto &[type, param] : boolParams)
     {
-        if (&param.get() == &value)
+        std::shared_lock controlLock(updateControlsMutex);
+        for (auto &[type, param] : boolParams)
         {
-            bool autoMode = false;
-            if (autoParams.count(type))
+            if (&param.get() == &value)
             {
-                autoMode = autoParams[type];
+                bool autoMode = false;
+                if (autoParams.count(type))
+                {
+                    autoMode = autoParams[type];
+                }
+                camera.setControlValue(type, value ? 1 : 0, autoMode);
+                break;
             }
-            camera.setControlValue(type, value ? 1 : 0, autoMode);
-            break;
         }
     }
 }
 
 void ofxASICameraGui::onAutoParamChanged(bool &value)
 {
-
-    for (auto &[type, toggle] : autoParams)
     {
-        if (&toggle.get() == &value)
+        std::shared_lock controlLock(updateControlsMutex);
+        for (auto &[type, toggle] : autoParams)
         {
-            int val = intParams[type].get();
-            camera.setControlValue(type, val, value);
-            break;
+            if (&toggle.get() == &value)
+            {
+                int val = intParams[type].get();
+                camera.setControlValue(type, val, value);
+                break;
+            }
         }
     }
 }
@@ -325,4 +340,39 @@ void ofxASICameraGui::onImageTypeChanged(int &)
 {
     stopCapture();
     startCapture();
+}
+
+void ofxASICameraGui::updateControlLoop()
+{
+    while (true)
+    {
+        {
+            std::shared_lock controlLock(updateControlsMutex);
+            for (auto &[type, param] : intParams)
+            {
+                bool autoMode;
+                int val = camera.getControlValue(type, &autoMode);
+                param.setWithoutEventNotifications(val);
+
+                if (autoParams.count(type))
+                {
+                    autoParams[type] = autoMode;
+                }
+            }
+
+            for (auto &[type, param] : boolParams)
+            {
+                bool autoMode;
+                int val = camera.getControlValue(type, &autoMode);
+                param.setWithoutEventNotifications(val);
+
+                if (autoParams.count(type))
+                {
+                    autoParams[type] = autoMode;
+                }
+            }
+        }
+
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
 }
