@@ -2,10 +2,10 @@
 
 #include "ofMain.h"
 #include "ASICamera2.h"
-#include "ofxASICamera.h"
-#include "ofxOSCControl.h"
-#include "LogPanel.h"
-#include "ofxASICameraManagerGui.h"
+#include "camera/ofxASICamera.h"
+#include "osc/ofxOSCControl.h"
+#include "log/LogPanel.h"
+#include "camera/ofxASICameraManagerGui.h"
 
 class ofApp : public ofBaseApp
 {
