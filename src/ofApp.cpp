@@ -11,7 +11,7 @@ void ofApp::setup()
     logPanel.setup("Log", 200);
     logPanel.addLog("App started", OF_LOG_NOTICE);
     cameraManager.setup(&logPanel);
-    oscControl.setup();
+    oscControl.setup(&logPanel, &cameraManager);
 
     // Crée un chemin absolu vers le dossier à partir de data/
     std::string fullPath = ofToDataPath(".", true);

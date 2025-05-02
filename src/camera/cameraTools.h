@@ -169,6 +169,18 @@ static std::string getControlType(ASI_CONTROL_TYPE type)
     return control_type[type];
 }
 
+static ASI_CONTROL_TYPE getControlTypeFromString(const std::string &typeStr)
+{
+    for (int i = 0; i < sizeof(control_type) / sizeof(control_type[0]); i++)
+    {
+        if (control_type[i] == typeStr)
+        {
+            return static_cast<ASI_CONTROL_TYPE>(i);
+        }
+    }
+    throw std::runtime_error("Type de contrôle invalide: " + typeStr);
+}
+
 static std::string exposure_status[] = {"Idle", "Working", "Success", "Failed"};
 
 static std::string getExposureStatus(ASI_EXPOSURE_STATUS status)

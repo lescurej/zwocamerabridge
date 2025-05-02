@@ -20,15 +20,6 @@ void ofxASICamera::setup(LogPanel *logPanel)
     this->logPanel = logPanel;
 }
 
-void ofxASICamera::log(ofLogLevel level, const std::string &message) const
-{
-    std::shared_lock lock(logMutex);
-    if (logPanel)
-    {
-        logPanel->addLog(message, level);
-    }
-}
-
 std::optional<ASI_CAMERA_INFO> ofxASICamera::connect(int index)
 {
     log(OF_LOG_NOTICE, "Connecting to camera " + ofToString(index));
@@ -104,7 +95,7 @@ std::future<void> ofxASICamera::startCaptureThread(int _width, int _height, ASI_
         imgType = type;
     }
 
-       // int iWidth,  the width of the ROI area. Make sure iWidth%8 == 0.
+    // int iWidth,  the width of the ROI area. Make sure iWidth%8 == 0.
     // int iHeight,  the height of the ROI area. Make sure iHeight%2 == 0,
     // further, for USB2.0 camera ASI120, please make sure that iWidth*iHeight%1024=0.
 
@@ -433,6 +424,13 @@ void ofxASICamera::setControlValue(ASI_CONTROL_TYPE type, float value, bool auto
         cachedExposure = value;
     }
     // log(OF_LOG_NOTICE, "Control value set: " + getControlType(type) + " to " + ofToString(value));
+}
+
+void ofxASICamera::setControlValue(ASI_CONTROL_TYPE type, float value)
+{
+    bool autoMode = false;
+    getControlValue(type, &autoMode);
+    setControlValue(type, value, autoMode);
 }
 
 std::vector<ASI_CONTROL_CAPS> ofxASICamera::getAllControls()

@@ -13,11 +13,12 @@ public:
     void draw();
     void update();
 
+    void setControlValue(ASI_CONTROL_TYPE type, float value, bool autoMode);
+    void setControlValue(ASI_CONTROL_TYPE type, float value);
+
     void exit();
 
 private:
-    void deleteCameraGui();
-
     LogPanel *logPanel = nullptr;
     void log(ofLogLevel level, const std::string &message)
     {

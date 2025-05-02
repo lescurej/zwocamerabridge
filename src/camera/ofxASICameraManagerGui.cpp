@@ -98,3 +98,21 @@ void ofxASICameraManagerGui::exit()
     saveSettings();
     onDisconnectPressed();
 }
+
+void ofxASICameraManagerGui::setControlValue(ASI_CONTROL_TYPE type, float value, bool autoMode)
+{
+    log(OF_LOG_NOTICE, "setControlValue: " + ofToString(type) + " " + ofToString(value) + " " + ofToString(autoMode));
+    if (cameraGui)
+    {
+        cameraGui->setControlValue(type, value, autoMode);
+    }
+}
+
+void ofxASICameraManagerGui::setControlValue(ASI_CONTROL_TYPE type, float value)
+{
+    log(OF_LOG_NOTICE, "setControlValue: " + ofToString(type) + " " + ofToString(value));
+    if (cameraGui)
+    {
+        cameraGui->setControlValue(type, value);
+    }
+}

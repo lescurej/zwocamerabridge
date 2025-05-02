@@ -15,6 +15,9 @@ public:
     void draw();
     void update();
 
+    void setControlValue(ASI_CONTROL_TYPE type, float value, bool autoMode);
+    void setControlValue(ASI_CONTROL_TYPE type, float value);
+
 private:
     LogPanel *logPanel = nullptr;
     void log(ofLogLevel level, const std::string &message)
@@ -44,7 +47,6 @@ private:
     ofParameter<float> fps;
 
     std::unique_ptr<std::thread> updateControlsThread;
-
     void updateControlLoop();
     mutable std::shared_mutex updateControlsMutex;
 

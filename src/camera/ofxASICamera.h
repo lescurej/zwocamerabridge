@@ -48,7 +48,9 @@ public:
 
     // Camera control methods
     float getControlValue(ASI_CONTROL_TYPE type, bool *autoMode = nullptr);
-    void setControlValue(ASI_CONTROL_TYPE type, float value, bool autoMode = false);
+    void setControlValue(ASI_CONTROL_TYPE type, float value, bool autoMode);
+    void setControlValue(ASI_CONTROL_TYPE type, float value);
+
     std::vector<ASI_CONTROL_CAPS> getAllControls();
 
     int getCameraID() const noexcept
@@ -114,7 +116,14 @@ private:
 
     LogPanel *logPanel;
     mutable std::shared_mutex logMutex;
-    void log(ofLogLevel level, const std::string &message) const;
+    void log(ofLogLevel level, const std::string &message) const
+    {
+        std::shared_lock lock(logMutex);
+        if (logPanel)
+        {
+            logPanel->addLog(message, level);
+        }
+    }
 
     std::atomic<bool> textureUpdateNeeded{false};
 

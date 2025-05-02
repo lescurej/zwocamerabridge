@@ -286,10 +286,26 @@ void ofxASICameraGui::onAutoParamChanged(bool &value)
             if (&toggle.get() == &value)
             {
                 int val = intParams[type].get();
-                camera.setControlValue(type, val, value);
+                setControlValue(type, val, value);
                 break;
             }
         }
+    }
+}
+
+void ofxASICameraGui::setControlValue(ASI_CONTROL_TYPE type, float value, bool autoMode)
+{
+    if (camera.isConnected())
+    {
+        camera.setControlValue(type, value, autoMode);
+    }
+}
+
+void ofxASICameraGui::setControlValue(ASI_CONTROL_TYPE type, float value)
+{
+    if (camera.isConnected())
+    {
+        camera.setControlValue(type, value);
     }
 }
 

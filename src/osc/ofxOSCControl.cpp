@@ -1,13 +1,12 @@
 #include "ofxOSCControl.h"
 #define OSC_SETTINGS_FILE "osc.json"
+#include "cameraTools.h"
+
+const std::string OSC_PREFIX = "/camera/astro/";
 
 // Constructeur
 ofxOSCControl::ofxOSCControl()
 {
-    receivePort = 12345;
-    sendPort = 54321;
-    receiveHost = "127.0.0.1";
-    bNewMessage = false;
 }
 
 ofxOSCControl::~ofxOSCControl()
@@ -20,12 +19,17 @@ void ofxOSCControl::saveSettings()
 }
 
 // Setup de l'OSC et du GUI
-void ofxOSCControl::setup()
+void ofxOSCControl::setup(LogPanel *logPanel, ofxASICameraManagerGui *cameraManagerGui)
 {
+    this->logPanel = logPanel;
+    this->cameraManagerGui = cameraManagerGui;
     gui.setup("OSC controls", OSC_SETTINGS_FILE, 250, 10);
-    gui.add(receivePortSlider.setup("Receive Port", 12345, 1024, 65535));
-    gui.add(sendPortSlider.setup("Send Port", 54321, 1024, 65535));
-    gui.add(receiveHostInput.setup("Receive Host", "127.0.0.1"));
+    gui.add(receivePortSlider.setup("Receive Port", receivePort, 1024, 65535));
+    receivePortSlider.addListener(this, &ofxOSCControl::onReceivePortChanged);
+    gui.add(sendPortSlider.setup("Send Port", sendPort, 1024, 65535));
+    sendPortSlider.addListener(this, &ofxOSCControl::onSendPortChanged);
+    gui.add(sendHostInput.setup("Send Host", receiveHost));
+    sendHostInput.addListener(this, &ofxOSCControl::onSendHostInputHostChanged);
     gui.loadFromFile(OSC_SETTINGS_FILE);
 
     receiver.setup(receivePort);
@@ -37,7 +41,6 @@ void ofxOSCControl::setup()
         return;
     }
 
-    fetchCameraControls();
     startThread();
 }
 
@@ -49,49 +52,38 @@ void ofxOSCControl::update()
     {
         // Traiter ici si nécessaire
     }
+    auto frameNum = ofGetFrameNum();
+    if (frameNum % 50 == 0)
+    {
+        ofxOscMessage m;
+        m.setAddress(OSC_PREFIX + "heartbeat");
+        m.addIntArg(frameNum);
+        sender.sendMessage(m, false);
+    }
 }
 
 // Dessiner l'interface graphique
 void ofxOSCControl::draw()
 {
     gui.draw();
-}
 
-// Envoi des messages OSC pour contrôler la caméra
-void ofxOSCControl::sendControlValue(int controlID, float value)
-{
-    ofxOscMessage m;
-    m.setAddress("/camera/control");
-    m.addIntArg(controlID);
-    m.addFloatArg(value);
-    sender.sendMessage(m, false);
-}
-
-// Récupérer les paramètres de contrôle de la caméra
-void ofxOSCControl::fetchCameraControls()
-{
-    int numControls = 0;
-    ASIGetNumOfControls(cameraID, &numControls);
-
-    std::lock_guard<std::mutex> lock(controlsMutex);
-    controls.clear();
-    for (int i = 0; i < numControls; ++i)
+    if (gui.isMinimized())
     {
-        ASI_CONTROL_CAPS cap;
-        ASIGetControlCaps(cameraID, i, &cap);
-        controls.push_back(cap);
+        return; // ne rien dessiner si le panel est caché
     }
-}
 
-// Appliquer un contrôle à la caméra
-void ofxOSCControl::setCameraControl(int controlID, float value)
-{
-    std::lock_guard<std::mutex> lock(controlsMutex);
-    if (controlID >= 0 && controlID < controls.size())
+    float startX = gui.getPosition().x + 10;
+    float startY = gui.getPosition().y + gui.getHeight() + 10;
+    float lineHeight = 15;
+
+    ofDrawBitmapString("arg1:value in float", startX, startY);
+    ofDrawBitmapString("arg2:auto in bool (optional)", startX, startY + lineHeight);
+    for (size_t i = 0; i < sizeof(control_type) / sizeof(control_type[0]); i++)
     {
-        ASI_CONTROL_CAPS cap = controls[controlID];
-        ASISetControlValue(cameraID, cap.ControlType, value, ASI_TRUE);
+        ofDrawBitmapString(OSC_PREFIX + control_type[i], startX, startY + (i + 2) * lineHeight);
     }
+
+    ofSetColor(255); // reset color
 }
 
 // Thread d'exécution pour gérer la réception des messages OSC
@@ -105,21 +97,36 @@ void ofxOSCControl::threadedFunction()
             {
                 ofxOscMessage m;
                 receiver.getNextMessage(m);
-                if (m.getAddress() == "/camera/control")
+                if (m.getAddress().find(OSC_PREFIX) == 0)
                 {
-                    int controlID = m.getArgAsInt(0);
-                    float value = m.getArgAsFloat(1);
-
-                    // Traiter le message de manière thread-safe
+                    auto fullAddress = m.getAddress();
+                    std::vector<std::string> addressParts;
+                    std::stringstream ss(fullAddress);
+                    std::string part;
+                    while (std::getline(ss, part, '/'))
                     {
-                        std::lock_guard<std::mutex> lock(controlsMutex);
-                        if (controlID >= 0 && controlID < controls.size())
+                        if (!part.empty())
                         {
-                            ASI_CONTROL_CAPS cap = controls[controlID];
-                            ASISetControlValue(cameraID, cap.ControlType, value, ASI_TRUE);
-                            std::atomic_store(&bNewMessage, true);
+                            addressParts.push_back(part);
                         }
                     }
+                    if (m.getNumArgs() == 0)
+                        return;
+
+                    std::string controlTypeString = addressParts[2];
+                    auto controlType = getControlTypeFromString(controlTypeString);
+
+                    float value = m.getArgAsFloat(0);
+                    if (m.getNumArgs() > 1)
+                    {
+                        bool autoMode = m.getArgAsInt(1) == 1;
+                        cameraManagerGui->setControlValue(controlType, value, autoMode);
+                    }
+                    else
+                    {
+                        cameraManagerGui->setControlValue(controlType, value);
+                    }
+                    std::atomic_store(&bNewMessage, true);
                 }
             }
         }
@@ -134,6 +141,8 @@ void ofxOSCControl::threadedFunction()
 
 void ofxOSCControl::exit()
 {
+    cameraManagerGui = nullptr;
+    logPanel = nullptr;
     stopThread();
     waitForThread(true, 500);
     try
@@ -141,12 +150,28 @@ void ofxOSCControl::exit()
         saveSettings();
         receiver.stop();
         sender.clear();
-
-        std::lock_guard<std::mutex> lock(controlsMutex);
-        controls.clear();
     }
     catch (const std::exception &e)
     {
         ofLogError() << "Exception during exit: " << e.what();
     }
+}
+
+void ofxOSCControl::onReceivePortChanged(int &value)
+{
+    receivePort = value;
+    receiver.stop();
+    receiver.setup(receiveHost, receivePort);
+}
+
+void ofxOSCControl::onSendPortChanged(int &value)
+{
+    sendPort = value;
+    sender.setup(receiveHost, sendPort);
+}
+
+void ofxOSCControl::onSendHostInputHostChanged(std::string &value)
+{
+    receiveHost = value;
+    sender.setup(receiveHost, sendPort);
 }
