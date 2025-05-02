@@ -68,5 +68,16 @@ install_name_tool -change \
 
 #otool -L "${BIN_ PATH}"
 
+# Chemin vers l'icône
+cp "$SCRIPT_DIR/resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/"
+
+# Vérification du plist
+PLIST_FILE="${APP_BUNDLE}/Contents/Info.plist"
+
+# Injecte l'icône dans le plist si besoin
+echo "[Post-Build] Insertion CFBundleIconFile dans Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$PLIST_FILE" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$PLIST_FILE"
+
 cd "$SCRIPT_DIR/bin"
 zip -r "${APP_NAME}.zip" "${APP_NAME}.app"
