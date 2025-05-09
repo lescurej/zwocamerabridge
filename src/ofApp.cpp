@@ -3,6 +3,7 @@
 //--------------------------------------------------------------
 void ofApp::setup()
 {
+    ofLogNotice() << "[APP] >>> setup()";
     ofSetWindowTitle("ASI Camera");
     ofSetVerticalSync(true);
     ofSetFrameRate(60);
@@ -20,12 +21,13 @@ void ofApp::setup()
     if (!dir.exists())
     {
         dir.create(true); // true = création récursive si besoin
-        ofLogNotice() << "Folder '" << fullPath << "' created";
+        ofLogNotice() << "[APP] Folder '" << fullPath << "' created";
     }
     else
     {
-        ofLogNotice() << "Folder '" << fullPath << "' already exists";
+        ofLogNotice() << "[APP] Folder '" << fullPath << "' already exists";
     }
+    ofLogNotice() << "[APP] <<< setup()";
 }
 
 //--------------------------------------------------------------
@@ -48,8 +50,13 @@ void ofApp::draw()
 //--------------------------------------------------------------
 void ofApp::exit()
 {
-
+    ofLogNotice() << "[APP] >>> exit()";
+    logPanel.addLog("[EXIT] App: Début de la fermeture", OF_LOG_NOTICE);
+    logPanel.addLog("[EXIT] App: cameraManager.exit()", OF_LOG_NOTICE);
     cameraManager.exit();
+    logPanel.addLog("[EXIT] App: oscControl.exit()", OF_LOG_NOTICE);
     oscControl.exit();
+    logPanel.addLog("[EXIT] App: Fin de la fermeture", OF_LOG_NOTICE);
     logPanel.addLog("Camera disconnected", OF_LOG_NOTICE);
+    ofLogNotice() << "[APP] <<< exit()";
 }

@@ -7,20 +7,25 @@ const std::string OSC_PREFIX = "/camera/astro/";
 // Constructeur
 ofxOSCControl::ofxOSCControl()
 {
+    ofLogNotice() << "[OSC] >>> Constructeur ofxOSCControl";
 }
 
 ofxOSCControl::~ofxOSCControl()
 {
+    ofLogNotice() << "[OSC] >>> Destructeur ~ofxOSCControl";
 }
 
 void ofxOSCControl::saveSettings()
 {
+    ofLogNotice() << "[OSC] >>> saveSettings()";
     gui.saveToFile(OSC_SETTINGS_FILE);
+    ofLogNotice() << "[OSC] <<< saveSettings()";
 }
 
 // Setup de l'OSC et du GUI
 void ofxOSCControl::setup(LogPanel *logPanel, ofxASICameraManagerGui *cameraManagerGui)
 {
+    ofLogNotice() << "[OSC] >>> setup()";
     this->logPanel = logPanel;
     this->cameraManagerGui = cameraManagerGui;
     gui.setup("OSC controls", OSC_SETTINGS_FILE, 250, 10);
@@ -37,16 +42,18 @@ void ofxOSCControl::setup(LogPanel *logPanel, ofxASICameraManagerGui *cameraMana
 
     if (!receiver.isListening())
     {
-        ofLogError() << "Receiver not initialized correctly!";
+        ofLogError() << "[OSC] Receiver not initialized correctly!";
         return;
     }
 
     startThread();
+    ofLogNotice() << "[OSC] <<< setup()";
 }
 
 // Mise à jour de l'interface graphique
 void ofxOSCControl::update()
 {
+    // ofLogNotice() << "[OSC] >>> update()";
     bool expected = true;
     if (std::atomic_compare_exchange_strong(&bNewMessage, &expected, false))
     {
@@ -60,15 +67,18 @@ void ofxOSCControl::update()
         m.addIntArg(frameNum);
         sender.sendMessage(m, false);
     }
+    // ofLogNotice() << "[OSC] <<< update()";
 }
 
 // Dessiner l'interface graphique
 void ofxOSCControl::draw()
 {
+    // ofLogNotice() << "[OSC] >>> draw()";
     gui.draw();
 
     if (gui.isMinimized())
     {
+        // ofLogNotice() << "[OSC] <<< draw() (panel minimized)";
         return; // ne rien dessiner si le panel est caché
     }
 
@@ -84,11 +94,13 @@ void ofxOSCControl::draw()
     }
 
     ofSetColor(255); // reset color
+    // ofLogNotice() << "[OSC] <<< draw()";
 }
 
 // Thread d'exécution pour gérer la réception des messages OSC
 void ofxOSCControl::threadedFunction()
 {
+    ofLogNotice() << "[OSC] >>> threadedFunction() (thread démarré)";
     while (isThreadRunning())
     {
         try
@@ -132,29 +144,36 @@ void ofxOSCControl::threadedFunction()
         }
         catch (const std::exception &e)
         {
-            ofLogError() << "Exception caught in OSC thread: " << e.what();
+            ofLogError() << "[OSC] Exception caught in OSC thread: " << e.what();
         }
 
         ofSleepMillis(10);
     }
+    ofLogNotice() << "[OSC] <<< threadedFunction() (thread terminé)";
 }
 
 void ofxOSCControl::exit()
 {
+    ofLogNotice() << "[OSC] >>> exit()";
+    log(OF_LOG_NOTICE, "[EXIT] ofxOSCControl::exit: Début");
     cameraManagerGui = nullptr;
     logPanel = nullptr;
     stopThread();
+    log(OF_LOG_NOTICE, "[EXIT] ofxOSCControl::exit: Thread arrêté");
     waitForThread(true, 500);
     try
     {
         saveSettings();
         receiver.stop();
         sender.clear();
+        log(OF_LOG_NOTICE, "[EXIT] ofxOSCControl::exit: OSC stopped and cleared");
     }
     catch (const std::exception &e)
     {
-        ofLogError() << "Exception during exit: " << e.what();
+        ofLogError() << "[OSC] Exception during exit: " << e.what();
     }
+    log(OF_LOG_NOTICE, "[EXIT] ofxOSCControl::exit: Fin");
+    ofLogNotice() << "[OSC] <<< exit()";
 }
 
 void ofxOSCControl::onReceivePortChanged(int &value)

@@ -11,6 +11,7 @@ void ofxASICameraGui::setup(LogPanel *logPanel)
 
 void ofxASICameraGui::connect(int _cameraIndex)
 {
+    log(OF_LOG_NOTICE, "[CONNECT] >>> Entrée connect index=" + ofToString(_cameraIndex));
     this->settingsFileName = "camera_" + ofToString(_cameraIndex) + ".json";
     panel.setup("ASI Camera Controls:" + ofToString(_cameraIndex), settingsFileName, 500, 10);
 
@@ -20,27 +21,25 @@ void ofxASICameraGui::connect(int _cameraIndex)
     fps.set("FPS", 0, 0, 240);
     panel.add(fps);
 
-    // Paramètres de configuration
+    log(OF_LOG_NOTICE, "[CONNECT] >>> Avant camera.connect");
     auto info = camera.connect(_cameraIndex);
-    log(OF_LOG_NOTICE, "info.CameraID: " + ofToString(info->CameraID));
+    log(OF_LOG_NOTICE, "[CONNECT] <<< Après camera.connect");
+    log(OF_LOG_NOTICE, "[CONNECT] info.CameraID: " + ofToString(info->CameraID));
     resolutionMaxWidth.set("Max Width", info->MaxWidth, info->MaxWidth, info->MaxWidth);
     panel.add(resolutionMaxWidth);
 
     resolutionMaxHeight.set("Max Height", info->MaxHeight, info->MaxHeight, info->MaxHeight);
     panel.add(resolutionMaxHeight);
 
-    // Image type
     std::vector<std::string> imageTypeVec(std::begin(imageType), std::end(imageType));
     imageTypeToggleGroup.setup("Image Type", imageTypeVec, 1);
     panel.add(&imageTypeToggleGroup);
     imageTypeToggleGroup.getParameter().addListener(this, &ofxASICameraGui::onImageTypeChanged);
 
-    // Binning
     std::vector<int> bins;
     for (int i = 0; i < 16 && info->SupportedBins[i] != 0; ++i)
         bins.push_back(info->SupportedBins[i]);
     std::vector<std::string> binVec;
-
     for (auto bin : bins)
     {
         auto width = int(info->MaxWidth / bin);
@@ -53,7 +52,6 @@ void ofxASICameraGui::connect(int _cameraIndex)
     binToggleGroup.getParameter().addListener(this, &ofxASICameraGui::onBinningChanged);
     panel.add(&binToggleGroup);
 
-    // Affichage des infos caméra
     std::string infoStr = "Nom: " + std::string(info->Name) +
                           "\nID: " + ofToString(info->CameraID) +
                           "\nMax: " + ofToString(info->MaxWidth) + "x" + ofToString(info->MaxHeight) +
@@ -61,12 +59,11 @@ void ofxASICameraGui::connect(int _cameraIndex)
     cameraInfo.setup("Infos", infoStr);
     panel.add(&cameraInfo);
 
-    log(OF_LOG_NOTICE, "info.IsTriggerCam: " + ofToString(info->IsTriggerCam));
-    // Mode caméra (si supporté)
+    log(OF_LOG_NOTICE, "[CONNECT] info.IsTriggerCam: " + ofToString(info->IsTriggerCam));
     if (info->IsTriggerCam)
     {
         auto modes = camera.getSupportedModes();
-        log(OF_LOG_NOTICE, "modes: " + ofToString(modes.size()));
+        log(OF_LOG_NOTICE, "[CONNECT] modes: " + ofToString(modes.size()));
         if (!modes.empty())
         {
             std::vector<std::string> modeVec;
@@ -74,7 +71,7 @@ void ofxASICameraGui::connect(int _cameraIndex)
             {
                 modeVec.push_back(getMode(mode));
             }
-            log(OF_LOG_NOTICE, "modeVec: " + ofToString(modeVec));
+            log(OF_LOG_NOTICE, "[CONNECT] modeVec: " + ofToString(modeVec));
             modeToggleGroup.setup("Mode", modeVec, 0);
             panel.add(&modeToggleGroup);
             modeToggleGroup.getParameter().addListener(this, &ofxASICameraGui::onModeChanged);
@@ -85,11 +82,11 @@ void ofxASICameraGui::connect(int _cameraIndex)
         }
     }
 
+    log(OF_LOG_NOTICE, "[CONNECT] >>> Avant getAllControls");
     auto controls = camera.getAllControls();
-    log(OF_LOG_NOTICE, "number of controls: " + ofToString(controls.size()));
+    log(OF_LOG_NOTICE, "[CONNECT] number of controls: " + ofToString(controls.size()));
     {
         std::shared_lock controlLock(updateControlsMutex);
-
         intParams.clear();
         boolParams.clear();
         autoParams.clear();
@@ -98,7 +95,7 @@ void ofxASICameraGui::connect(int _cameraIndex)
     {
         bool bAuto;
         auto currentValue = camera.getControlValue(cap.ControlType, &bAuto);
-
+        log(OF_LOG_NOTICE, "[CONNECT] Control: " + std::string(cap.Name) + ", value: " + ofToString(currentValue) + ", auto: " + ofToString(bAuto));
         const std::vector<ASI_CONTROL_TYPE> intParamsType = {
             ASI_GAIN,
             ASI_EXPOSURE,
@@ -115,19 +112,11 @@ void ofxASICameraGui::connect(int _cameraIndex)
             ASI_TARGET_TEMP,
             ASI_COOLER_POWER_PERC,
         };
-
         const std::vector<ASI_CONTROL_TYPE> boolParamsType = {ASI_HARDWARE_BIN, ASI_HIGH_SPEED_MODE, ASI_COOLER_ON, ASI_MONO_BIN, ASI_FAN_ON, ASI_ANTI_DEW_HEATER};
-
         auto isIntControl = [&intParamsType](ASI_CONTROL_TYPE type) -> bool
-        {
-            return std::find(intParamsType.begin(), intParamsType.end(), type) != intParamsType.end();
-        };
-
+        { return std::find(intParamsType.begin(), intParamsType.end(), type) != intParamsType.end(); };
         auto isBooleanControl = [&boolParamsType](ASI_CONTROL_TYPE type) -> bool
-        {
-            return std::find(boolParamsType.begin(), boolParamsType.end(), type) != boolParamsType.end();
-        };
-
+        { return std::find(boolParamsType.begin(), boolParamsType.end(), type) != boolParamsType.end(); };
         if (isBooleanControl(cap.ControlType))
         {
             auto &param = boolParams[cap.ControlType];
@@ -152,7 +141,6 @@ void ofxASICameraGui::connect(int _cameraIndex)
                 panel.add(param);
             }
         }
-
         if (cap.IsAutoSupported)
         {
             {
@@ -165,60 +153,65 @@ void ofxASICameraGui::connect(int _cameraIndex)
             }
         }
     }
+    log(OF_LOG_NOTICE, "[CONNECT] >>> Avant panel.loadFromFile");
     panel.loadFromFile(settingsFileName);
+    log(OF_LOG_NOTICE, "[CONNECT] <<< Après panel.loadFromFile");
+    bNeedStartCapture = true;
     isConnected = true;
+    log(OF_LOG_NOTICE, "[CONNECT] <<< Fin connect");
 }
 
 void ofxASICameraGui::disconnect()
 {
-
+    log(OF_LOG_NOTICE, "[EXIT] ofxASICameraGui::disconnect: Début");
     isConnected = false;
     if (updateControlsThread && updateControlsThread->joinable())
     {
         try
         {
+            log(OF_LOG_NOTICE, "[EXIT] ofxASICameraGui::disconnect: join updateControlsThread...");
+            bThreadRunning = false;
             updateControlsThread->join();
+            log(OF_LOG_NOTICE, "[EXIT] ofxASICameraGui::disconnect: updateControlsThread joinée");
         }
         catch (const std::exception &e)
         {
-            log(OF_LOG_ERROR, "Error stopping update controls thread: " + std::string(e.what()));
+            log(OF_LOG_ERROR, std::string("[EXIT] Error stopping update controls thread: ") + e.what());
         }
     }
 
     if (camera.isConnected())
     {
-        log(OF_LOG_NOTICE, "Disconnecting camera");
+        log(OF_LOG_NOTICE, "[EXIT] ofxASICameraGui::disconnect: Disconnecting camera");
         camera.close();
     }
     panel.saveToFile(settingsFileName);
 
     imageTypeToggleGroup.getParameter().removeListener(this, &ofxASICameraGui::onImageTypeChanged);
-
     modeToggleGroup.getParameter().removeListener(this, &ofxASICameraGui::onModeChanged);
-
     softTriggerButton.removeListener(this, &ofxASICameraGui::onSoftTriggerPressed);
-
-    {
-        std::shared_lock controlLock(updateControlsMutex);
-        for (auto &[type, param] : intParams)
-        {
-            param.removeListener(this, &ofxASICameraGui::onParamIntChanged);
-        }
-        for (auto &[type, param] : boolParams)
-        {
-            param.removeListener(this, &ofxASICameraGui::onParamBoolChanged);
-        }
-        for (auto &[type, toggle] : autoParams)
-        {
-            toggle.removeListener(this, &ofxASICameraGui::onAutoParamChanged);
-        }
-    }
+    log(OF_LOG_NOTICE, "[EXIT] ofxASICameraGui::disconnect: Fin");
 }
 
 void ofxASICameraGui::update()
 {
     if (!isConnected)
         return;
+    if (bNeedStartCapture)
+    {
+        int binIndex = binToggleGroup.getSelectedIndex();
+        int imageTypeIndex = imageTypeToggleGroup.getSelectedIndex();
+        if (camera.isConnected())
+        {
+            int binValue = binIndex + 1;
+            int width = int(resolutionMaxWidth / binValue);
+            int height = int(resolutionMaxHeight / binValue);
+            adjust_roi_size(width, height);
+            ASI_IMG_TYPE imgType = getImageTypeFromInt(imageTypeIndex);
+            camera.startCaptureThread(width, height, imgType, binValue);
+        }
+        bNeedStartCapture = false;
+    }
     if (camera.isCaptureRunning())
     {
         fps = camera.getFPS();
@@ -239,6 +232,7 @@ void ofxASICameraGui::draw()
 
 void ofxASICameraGui::onParamIntChanged(int &value)
 {
+    // log(OF_LOG_NOTICE, "[DEBUG] onParamIntChanged(" + ofToString(value) + ") called");
     {
         std::shared_lock controlLock(updateControlsMutex);
         for (auto &[type, param] : intParams)
@@ -259,6 +253,7 @@ void ofxASICameraGui::onParamIntChanged(int &value)
 
 void ofxASICameraGui::onParamBoolChanged(bool &value)
 {
+    // log(OF_LOG_NOTICE, "[DEBUG] onParamBoolChanged(" + ofToString(value) + ") called");
     {
         std::shared_lock controlLock(updateControlsMutex);
         for (auto &[type, param] : boolParams)
@@ -279,6 +274,7 @@ void ofxASICameraGui::onParamBoolChanged(bool &value)
 
 void ofxASICameraGui::onAutoParamChanged(bool &value)
 {
+    // log(OF_LOG_NOTICE, "[DEBUG] onAutoParamChanged(" + ofToString(value) + ") called");
     {
         std::shared_lock controlLock(updateControlsMutex);
         for (auto &[type, toggle] : autoParams)
@@ -329,38 +325,58 @@ void ofxASICameraGui::onSoftTriggerPressed()
 
 void ofxASICameraGui::startCapture()
 {
+    if (!isConnected)
+    {
+        return;
+    }
     if (camera.isConnected())
     {
-        auto width = int(resolutionMaxWidth / (binToggleGroup.getSelectedIndex() + 1));
-        auto height = int(resolutionMaxHeight / (binToggleGroup.getSelectedIndex() + 1));
+        int binIndex = binToggleGroup.getSelectedIndex();
+        int binValue = binIndex + 1;
+        int width = int(resolutionMaxWidth / binValue);
+        int height = int(resolutionMaxHeight / binValue);
         adjust_roi_size(width, height);
-        camera.startCaptureThread(width, height, getImageTypeFromInt(imageTypeToggleGroup.getSelectedIndex()), binToggleGroup.getSelectedIndex() + 1);
+        int imageTypeIndex = imageTypeToggleGroup.getSelectedIndex();
+        ASI_IMG_TYPE imgType = getImageTypeFromInt(imageTypeIndex);
+        camera.startCaptureThread(width, height, imgType, binValue);
     }
 }
 
 void ofxASICameraGui::stopCapture()
 {
+    if (!isConnected)
+    {
+        return;
+    }
     if (camera.isConnected())
     {
         camera.stopCaptureThread();
     }
 }
 
-void ofxASICameraGui::onBinningChanged(int &)
+void ofxASICameraGui::onBinningChanged(int &val)
 {
+    if (!isConnected)
+    {
+        return;
+    }
     stopCapture();
     startCapture();
 }
 
-void ofxASICameraGui::onImageTypeChanged(int &)
+void ofxASICameraGui::onImageTypeChanged(int &val)
 {
+    if (!isConnected)
+    {
+        return;
+    }
     stopCapture();
     startCapture();
 }
 
 void ofxASICameraGui::updateControlLoop()
 {
-    while (true)
+    while (bThreadRunning)
     {
         {
             std::shared_lock controlLock(updateControlsMutex);

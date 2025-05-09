@@ -19,6 +19,8 @@ public:
     void setControlValue(ASI_CONTROL_TYPE type, float value);
 
 private:
+    std::atomic<bool> bThreadRunning{true};
+    bool bNeedStartCapture = false;
     LogPanel *logPanel = nullptr;
     void log(ofLogLevel level, const std::string &message)
     {
