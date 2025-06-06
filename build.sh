@@ -75,7 +75,8 @@ if [ ! -d "$SYPHON_DEST" ]; then
         exit 1
     fi
     echo "[Post-Build] Copying Syphon.framework..."
-    cp -R "$SYPHON_SOURCE" "$SYPHON_DEST"
+    # Use ditto to preserve the framework structure and symlinks
+    ditto "$SYPHON_SOURCE" "$SYPHON_DEST"
 fi
 
 install_name_tool -change \

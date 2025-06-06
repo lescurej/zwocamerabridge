@@ -16,7 +16,7 @@ https://www.zwoastro.com/product/asi2600/
 - macOS
 - openFrameworks 0.12.0: https://openframeworks.cc/download/
  - ofxSyphon addon: https://github.com/astellato/ofxSyphon (must be installed in the openFrameworks addons folder)
-   - the build script copies `Syphon.framework` from `OF_ROOT/addons/ofxSyphon/libs/Syphon/lib/osx`. If the framework is missing at this location the build will fail.
+  - the build script copies `Syphon.framework` from `OF_ROOT/addons/ofxSyphon/libs/Syphon/lib/osx` using `ditto` to preserve the framework's symlinks. If the framework is missing at this location the build will fail.
 
 **Important**: The application depends on the proprietary `ASICamera2` library
 which only provides x86_64 binaries. If you are on Apple Silicon, make sure the
