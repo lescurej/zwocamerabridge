@@ -12,6 +12,7 @@ build:
   script:
     - curl -L https://github.com/openframeworks/openFrameworks/releases/download/0.12.0/of_v0.12.0_osx_release.zip -o of.zip
     - unzip -q of.zip
+    - rm -rf ../of_v0.12.0_osx_release
     - mv of_v0.12.0_osx_release ..
     - git clone --depth 1 https://github.com/astellato/ofxSyphon ../of_v0.12.0_osx_release/addons/ofxSyphon
     - ./build.sh Release
