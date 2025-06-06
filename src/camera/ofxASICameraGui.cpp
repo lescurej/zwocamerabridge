@@ -2,6 +2,16 @@
 #include "ofxASICameraGui.h"
 #include "cameraTools.h"
 
+ofxASICameraGui::~ofxASICameraGui()
+{
+    log(OF_LOG_NOTICE, "[GUI] >>> Destructor ~ofxASICameraGui");
+    if (isConnected || (updateControlsThread && updateControlsThread->joinable()))
+    {
+        disconnect();
+    }
+    log(OF_LOG_NOTICE, "[GUI] <<< Destructor ~ofxASICameraGui");
+}
+
 void ofxASICameraGui::setup(LogPanel *logPanel)
 {
     this->logPanel = logPanel;

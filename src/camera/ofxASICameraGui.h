@@ -9,6 +9,7 @@
 class ofxASICameraGui
 {
 public:
+    ~ofxASICameraGui();
     void setup(LogPanel *logPanel);
     void connect(int _cameraIndex);
     void disconnect();
