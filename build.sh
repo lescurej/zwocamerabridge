@@ -58,12 +58,22 @@ install_name_tool -change "@loader_path/libusb-1.0.0.dylib" \
   "@loader_path/../Frameworks/libusb-1.0.0.dylib" \
   "${FRAMEWORKS_PATH}/${DYLIB_NAME}"
 
-# Chemin vers Syphon.framework (fourni par ofxSyphon)
-SYPHON_SOURCE="$SCRIPT_DIR/../../../addons/ofxSyphon/libs/Syphon/lib/osx/Syphon.framework"
+# Determine the openFrameworks root just like config.make does
+OF_ROOT="$(realpath "$SCRIPT_DIR/../of_v0.12.0_osx_release")"
+if [ ! -f "$OF_ROOT/libs/openFrameworksCompiled/project/makefileCommon/compile.project.mk" ]; then
+    OF_ROOT="$(realpath "$SCRIPT_DIR/../../..")"
+fi
+
+# Path to Syphon.framework (provided by ofxSyphon)
+SYPHON_SOURCE="$OF_ROOT/addons/ofxSyphon/libs/Syphon/lib/osx/Syphon.framework"
 SYPHON_DEST="$FRAMEWORKS_PATH/Syphon.framework"
 
 # Copie si non déjà présent
 if [ ! -d "$SYPHON_DEST" ]; then
+    if [ ! -d "$SYPHON_SOURCE" ]; then
+        echo "Error: Syphon.framework not found at $SYPHON_SOURCE" >&2
+        exit 1
+    fi
     echo "[Post-Build] Copying Syphon.framework..."
     cp -R "$SYPHON_SOURCE" "$SYPHON_DEST"
 fi
