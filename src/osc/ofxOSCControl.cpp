@@ -156,11 +156,11 @@ void ofxOSCControl::exit()
 {
     ofLogNotice() << "[OSC] >>> exit()";
     log(OF_LOG_NOTICE, "[EXIT] ofxOSCControl::exit: Début");
-    cameraManagerGui = nullptr;
-    logPanel = nullptr;
     stopThread();
     log(OF_LOG_NOTICE, "[EXIT] ofxOSCControl::exit: Thread arrêté");
     waitForThread(true, 500);
+    cameraManagerGui = nullptr;
+    logPanel = nullptr;
     try
     {
         saveSettings();
