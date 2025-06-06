@@ -24,6 +24,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          token: ${{ secrets.GH_TOKEN_WITH_REPO_SCOPE }}
+
           files: bin/ZWOCameraBridge.dmg
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN_WITH_REPO_SCOPE }}
