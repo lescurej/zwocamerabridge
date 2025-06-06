@@ -13,6 +13,7 @@ build:
     - curl -L https://github.com/openframeworks/openFrameworks/releases/download/0.12.0/of_v0.12.0_osx_release.zip -o of.zip
     - unzip -q of.zip
     - mv of_v0.12.0_osx_release ..
+    - git clone --depth 1 https://github.com/astellato/ofxSyphon ../of_v0.12.0_osx_release/addons/ofxSyphon
     - ./build.sh Release
     - cd bin
     - hdiutil create -volname "$APP_NAME" -srcfolder "$APP_NAME.app" -ov -format UDZO "$APP_NAME.dmg"
