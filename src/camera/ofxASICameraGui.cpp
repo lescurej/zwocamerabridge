@@ -200,6 +200,27 @@ void ofxASICameraGui::disconnect()
     imageTypeToggleGroup.getParameter().removeListener(this, &ofxASICameraGui::onImageTypeChanged);
     modeToggleGroup.getParameter().removeListener(this, &ofxASICameraGui::onModeChanged);
     softTriggerButton.removeListener(this, &ofxASICameraGui::onSoftTriggerPressed);
+
+    {
+        std::shared_lock controlLock(updateControlsMutex);
+        for (auto &[type, param] : intParams)
+        {
+            param.removeListener(this, &ofxASICameraGui::onParamIntChanged);
+        }
+        intParams.clear();
+
+        for (auto &[type, param] : boolParams)
+        {
+            param.removeListener(this, &ofxASICameraGui::onParamBoolChanged);
+        }
+        boolParams.clear();
+
+        for (auto &[type, toggle] : autoParams)
+        {
+            toggle.removeListener(this, &ofxASICameraGui::onAutoParamChanged);
+        }
+        autoParams.clear();
+    }
     log(OF_LOG_NOTICE, "[EXIT] ofxASICameraGui::disconnect: Fin");
 }
 
