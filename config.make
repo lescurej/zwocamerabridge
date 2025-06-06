@@ -19,7 +19,14 @@ PROJECT_CFLAGS += -I$(PROJECT_ROOT)/libs/ASICamera2
 #   The location of your root openFrameworks installation
 #       (default) OF_ROOT = ../../.. 
 ################################################################################
-OF_ROOT = ../../..
+# Locate the openFrameworks root. When the project is built within the
+# openFrameworks tree the default "../../.." works. In CI or when building
+# directly from this repository, openFrameworks is expected next to the repo
+# folder (e.g. ../of_v0.12.0_osx_release).
+OF_ROOT := $(realpath ../of_v0.12.0_osx_release)
+ifeq ($(wildcard $(OF_ROOT)/libs/openFrameworksCompiled/project/makefileCommon/compile.project.mk),)
+    OF_ROOT := ../../..
+endif
 
 ################################################################################
 # PROJECT ROOT
