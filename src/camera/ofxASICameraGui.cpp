@@ -96,7 +96,7 @@ void ofxASICameraGui::connect(int _cameraIndex)
     auto controls = camera.getAllControls();
     log(OF_LOG_NOTICE, "[CONNECT] number of controls: " + ofToString(controls.size()));
     {
-        std::shared_lock controlLock(updateControlsMutex);
+        std::unique_lock controlLock(updateControlsMutex);
         intParams.clear();
         boolParams.clear();
         autoParams.clear();
@@ -137,7 +137,7 @@ void ofxASICameraGui::connect(int _cameraIndex)
         else
         {
             {
-                std::shared_lock controlLock(updateControlsMutex);
+                std::unique_lock controlLock(updateControlsMutex);
                 auto &param = intParams[cap.ControlType];
                 if (cap.ControlType == ASI_EXPOSURE)
                 {
@@ -154,7 +154,7 @@ void ofxASICameraGui::connect(int _cameraIndex)
         if (cap.IsAutoSupported)
         {
             {
-                std::shared_lock controlLock(updateControlsMutex);
+                std::unique_lock controlLock(updateControlsMutex);
                 auto name = std::string("Auto_") + cap.Name;
                 auto &toggle = autoParams[cap.ControlType];
                 toggle.set(name, bAuto);
@@ -410,7 +410,7 @@ void ofxASICameraGui::updateControlLoop()
     while (bThreadRunning)
     {
         {
-            std::shared_lock controlLock(updateControlsMutex);
+            std::unique_lock controlLock(updateControlsMutex);
             for (auto &[type, param] : intParams)
             {
                 bool autoMode;
