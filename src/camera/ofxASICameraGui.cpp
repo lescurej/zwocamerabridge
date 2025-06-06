@@ -419,7 +419,7 @@ void ofxASICameraGui::updateControlLoop()
 
                 if (autoParams.count(type))
                 {
-                    autoParams[type] = autoMode;
+                    autoParams[type].setWithoutEventNotifications(autoMode);
                 }
             }
 
@@ -431,7 +431,7 @@ void ofxASICameraGui::updateControlLoop()
 
                 if (autoParams.count(type))
                 {
-                    autoParams[type] = autoMode;
+                    autoParams[type].setWithoutEventNotifications(autoMode);
                 }
             }
         }
