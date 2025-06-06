@@ -15,12 +15,15 @@ https://www.zwoastro.com/product/asi2600/
 ## Requirements
 - macOS
 - openFrameworks 0.12.0: https://openframeworks.cc/download/
+- ofxSyphon addon: https://github.com/astellato/ofxSyphon (must be installed in the openFrameworks addons folder)
 
 ## Installation and Compilation
 
 Important: The `ZWOCameraBridge` project folder must be placed in the following directory of your openFrameworks installation:
 
 /of_v0.12.0_osx_release/apps/myApps/ZWOCameraBridge
+
+
 
 ### Compilation
 
