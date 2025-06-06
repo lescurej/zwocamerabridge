@@ -123,7 +123,7 @@ void ofxOSCControl::threadedFunction()
                         }
                     }
                     if (m.getNumArgs() == 0)
-                        return;
+                        continue;
 
                     std::string controlTypeString = addressParts[2];
                     auto controlType = getControlTypeFromString(controlTypeString);
