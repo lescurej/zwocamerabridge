@@ -75,7 +75,16 @@ cp "$SCRIPT_DIR/resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/"
 PLIST_FILE="${APP_BUNDLE}/Contents/Info.plist"
 
 # Injecte l'icône dans le plist si besoin
-echo "[Post-Build] Insertion CFBundleIconFile dans Info.plist"
+echo "[Post-Build] Updating Info.plist"
+# Ensure the executable and bundle identifiers are correctly set so the
+# generated .app is recognised by Finder. This prevents the
+# "application is damaged" error when launching.
+/usr/libexec/PlistBuddy -c "Set :CFBundleExecutable ${APP_NAME}" "$PLIST_FILE" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string ${APP_NAME}" "$PLIST_FILE"
+/usr/libexec/PlistBuddy -c "Set :CFBundleName ${APP_NAME}" "$PLIST_FILE" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleName string ${APP_NAME}" "$PLIST_FILE"
+/usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier net.zwocamerabridge.${APP_NAME}" "$PLIST_FILE" 2>/dev/null || \
+/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string net.zwocamerabridge.${APP_NAME}" "$PLIST_FILE"
 /usr/libexec/PlistBuddy -c "Set :CFBundleIconFile AppIcon" "$PLIST_FILE" 2>/dev/null || \
 /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$PLIST_FILE"
 

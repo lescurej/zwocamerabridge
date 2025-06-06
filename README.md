@@ -17,6 +17,10 @@ https://www.zwoastro.com/product/asi2600/
 - openFrameworks 0.12.0: https://openframeworks.cc/download/
 - ofxSyphon addon: https://github.com/astellato/ofxSyphon (must be installed in the openFrameworks addons folder)
 
+**Important**: The application depends on the proprietary `ASICamera2` library
+which only provides x86_64 binaries. If you are on Apple Silicon, compile and
+run the project using Rosetta so that the executable remains in x86_64.
+
 ## Installation and Compilation
 
 Important: The `ZWOCameraBridge` project folder must be placed in the following directory of your openFrameworks installation:
