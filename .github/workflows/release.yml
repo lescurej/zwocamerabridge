@@ -1,0 +1,29 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install openFrameworks
+        run: |
+          curl -L https://github.com/openframeworks/openFrameworks/releases/download/0.12.0/of_v0.12.0_osx_release.zip -o of.zip
+          unzip -q of.zip
+          mv of_v0.12.0_osx_release ..
+      - name: Build application
+        run: ./build.sh Release
+      - name: Package DMG
+        run: |
+          cd bin
+          hdiutil create -volname ZWOCameraBridge -srcfolder ZWOCameraBridge.app -ov -format UDZO ZWOCameraBridge.dmg
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: bin/ZWOCameraBridge.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

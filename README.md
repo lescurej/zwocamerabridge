@@ -45,6 +45,10 @@ The binary will be generated in the `bin/` folder.
 
 Launch the application from the `bin/ZWOCameraBridge.app` folder or via the terminal after compilation.
 
+## Continuous Integration
+
+GitHub Actions and GitLab CI pipelines build the application when a tag starting with `v` is pushed. The workflows download openFrameworks, run `build.sh` and create a DMG that is attached to the release.
+
 ---
 
 © 2025 - Johan Lescure.

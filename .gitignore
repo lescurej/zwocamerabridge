@@ -36,3 +36,6 @@ _CodeSignature/
 
 # Fichiers de configuration utilisateur
 settings.xml
+
+# Fichiers d'images disque
+*.dmg

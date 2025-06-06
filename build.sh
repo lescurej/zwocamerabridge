@@ -90,3 +90,6 @@ echo "[Post-Build] Updating Info.plist"
 
 cd "$SCRIPT_DIR/bin"
 zip -r "${APP_NAME}.zip" "${APP_NAME}.app"
+
+echo "[Post-Build] Creating DMG"
+hdiutil create -volname "${APP_NAME}" -srcfolder "${APP_NAME}.app" -ov -format UDZO "${APP_NAME}.dmg"
