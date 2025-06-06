@@ -19,7 +19,14 @@ APP_BUNDLE="bin/${APP_NAME}.app"
 FRAMEWORKS_PATH="${APP_BUNDLE}/Contents/Frameworks"
 
 echo "Building in $MODE mode..."
-make $MODE || exit 1
+
+# Ensure compilation happens for x86_64 when running on Apple Silicon
+if [[ "$(uname -m)" == "arm64" ]]; then
+    echo "Running make under Rosetta..."
+    arch -x86_64 make $MODE || exit 1
+else
+    make $MODE || exit 1
+fi
 
 echo "[Post-Build] Copie de ${DYLIB_NAME}"
 mkdir -p "$FRAMEWORKS_PATH"

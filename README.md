@@ -18,8 +18,10 @@ https://www.zwoastro.com/product/asi2600/
 - ofxSyphon addon: https://github.com/astellato/ofxSyphon (must be installed in the openFrameworks addons folder)
 
 **Important**: The application depends on the proprietary `ASICamera2` library
-which only provides x86_64 binaries. If you are on Apple Silicon, compile and
-run the project using Rosetta so that the executable remains in x86_64.
+which only provides x86_64 binaries. If you are on Apple Silicon, make sure the
+build happens under Rosetta so the executable remains in x86_64. The `build.sh`
+script detects Apple Silicon and invokes `make` using `arch -x86_64`
+automatically.
 
 ## Installation and Compilation
 
